@@ -29,24 +29,10 @@ suite('Terminal - Service Registry', () => {
             [ICodeExecutionService, TerminalCodeExecutionProvider, 'standard'],
         ].forEach((args) => {
             if (args.length === 2) {
-                services
-                    .setup((s) =>
-                        s.addSingleton(
-                            typemoq.It.is((v) => args[0] === v),
-                            typemoq.It.is((value) => args[1] === value),
-                        ),
-                    )
-                    .verifiable(typemoq.Times.once());
+                services.setup((s) => s.addSingleton(args[0] as any, args[1] as any)).verifiable(typemoq.Times.once());
             } else {
                 services
-                    .setup((s) =>
-                        s.addSingleton(
-                            typemoq.It.is((v) => args[0] === v),
-                            typemoq.It.is((value) => args[1] === value),
-
-                            typemoq.It.isValue((args[2] as unknown) as string),
-                        ),
-                    )
+                    .setup((s) => s.addSingleton(args[0] as any, args[1] as any, args[2] as string))
                     .verifiable(typemoq.Times.once());
             }
         });

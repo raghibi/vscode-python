@@ -3,6 +3,7 @@
 import * as net from 'net';
 import * as path from 'path';
 import { CancellationToken, Position, TestController, TestItem, Uri, Range } from 'vscode';
+import { Message } from 'vscode-jsonrpc';
 import { traceError, traceLog, traceVerbose } from '../../../logging';
 
 import { EnableTestAdapterRewrite } from '../../../common/experiments/groups';
@@ -18,6 +19,7 @@ import {
     ITestResultResolver,
 } from './types';
 import { Deferred, createDeferred } from '../../../common/utils/async';
+import { createNamedPipeServer, generateRandomPipeName } from '../../../common/pipes/namedPipes';
 
 export function fixLogLines(content: string): string {
     const lines = content.split(/\r?\n/g);
@@ -163,6 +165,26 @@ export function ExtractJsonRPCData(payloadLength: string | undefined, rawData: s
 export function pythonTestAdapterRewriteEnabled(serviceContainer: IServiceContainer): boolean {
     const experiment = serviceContainer.get<IExperimentService>(IExperimentService);
     return experiment.inExperimentSync(EnableTestAdapterRewrite.experiment);
+}
+
+export async function startTestIdsNamedPipe(testIds: string[]): Promise<string> {
+    const pipeName: string = generateRandomPipeName('python-test-ids');
+    const server = await createNamedPipeServer(pipeName);
+    server.onConnected().then(([_reader, writer]) => {
+        traceVerbose('Test Ids named pipe connected');
+        writer
+            .write({
+                jsonrpc: '2.0',
+                params: testIds,
+            } as Message)
+            .then(() => {
+                writer.end();
+            })
+            .catch((ex) => {
+                traceError('Failed to write test ids to named pipe', ex);
+            });
+    });
+    return pipeName;
 }
 
 export async function startTestIdServer(testIds: string[]): Promise<number> {

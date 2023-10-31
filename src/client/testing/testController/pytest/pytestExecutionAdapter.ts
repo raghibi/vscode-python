@@ -141,13 +141,9 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
             }
 
             // add port with run test ids to env vars
-            const pytestRunTestIdsPort = await utils.startTestIdServer(testIds);
-            mutableEnv.RUN_TEST_IDS_PORT = pytestRunTestIdsPort.toString();
-            traceInfo(
-                `All environment variables set for pytest execution in ${uri.fsPath} workspace: \n ${JSON.stringify(
-                    mutableEnv,
-                )}`,
-            );
+            const testIdsPipeName = await utils.startTestIdsNamedPipe(testIds);
+            mutableEnv.RUN_TEST_IDS_PIPE = testIdsPipeName;
+            traceInfo(`All environment variables set for pytest execution: ${JSON.stringify(mutableEnv)}`);
 
             const spawnOptions: SpawnOptions = {
                 cwd,
@@ -167,7 +163,7 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
                     testProvider: PYTEST_PROVIDER,
                     pytestPort,
                     pytestUUID,
-                    runTestIdsPort: pytestRunTestIdsPort.toString(),
+                    runTestIdsPort: testIdsPipeName,
                 };
                 traceInfo(
                     `Running DEBUG pytest with arguments: ${testArgs.join(' ')} for workspace ${uri.fsPath} \r\n`,

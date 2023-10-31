@@ -12,18 +12,26 @@ export interface NamesPipeConnected {
     onConnected(): Promise<[rpc.MessageReader, rpc.MessageWriter]>;
 }
 
-export function createNamedPipeServer(pipeName: string): Promise<[rpc.MessageReader, rpc.MessageWriter]> {
+export function createNamedPipeServer(pipeName: string): Promise<NamesPipeConnected> {
     traceVerbose(`Creating named pipe server on ${pipeName}`);
-    return new Promise<[rpc.MessageReader, rpc.MessageWriter]>((resolve, reject) => {
+    let connectResolve: (value: [rpc.MessageReader, rpc.MessageWriter]) => void;
+    const connected = new Promise<[rpc.MessageReader, rpc.MessageWriter]>((resolve, _reject) => {
+        connectResolve = resolve;
+    });
+    return new Promise((resolve, reject) => {
         const server = net.createServer((socket) => {
             server.close();
-            traceVerbose(`Named pipe server connected on ${pipeName}`);
-            resolve([new rpc.SocketMessageReader(socket), new rpc.SocketMessageWriter(socket)]);
+            connectResolve([
+                new rpc.SocketMessageReader(socket, 'utf-8'),
+                new rpc.SocketMessageWriter(socket, 'utf-8'),
+            ]);
         });
         server.on('error', reject);
         server.listen(pipeName, () => {
             server.removeListener('error', reject);
-            traceVerbose(`Named pipe server listening on ${pipeName}`);
+            resolve({
+                onConnected: () => connected,
+            });
         });
     });
 }

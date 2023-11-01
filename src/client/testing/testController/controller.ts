@@ -189,14 +189,12 @@ export class PythonTestController implements ITestController, IExtensionSingleAc
                 testProvider = PYTEST_PROVIDER;
                 resultResolver = new PythonResultResolver(this.testController, testProvider, workspace.uri);
                 discoveryAdapter = new PytestTestDiscoveryAdapter(
-                    this.pythonTestServer,
                     this.configSettings,
                     this.testOutputChannel,
                     resultResolver,
                     this.envVarsService,
                 );
                 executionAdapter = new PytestTestExecutionAdapter(
-                    this.pythonTestServer,
                     this.configSettings,
                     this.testOutputChannel,
                     resultResolver,

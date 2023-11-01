@@ -7,13 +7,7 @@ import { ChildProcess } from 'child_process';
 import { IConfigurationService, ITestOutputChannel } from '../../../common/types';
 import { Deferred } from '../../../common/utils/async';
 import { traceError, traceInfo, traceVerbose } from '../../../logging';
-import {
-    DataReceivedEvent,
-    ExecutionTestPayload,
-    ITestExecutionAdapter,
-    ITestResultResolver,
-    ITestServer,
-} from '../common/types';
+import { EOTTestPayload, ExecutionTestPayload, ITestExecutionAdapter, ITestResultResolver } from '../common/types';
 import {
     ExecutionFactoryCreateWithEnvironmentOptions,
     IPythonExecutionFactory,
@@ -28,7 +22,6 @@ import { IEnvironmentVariablesProvider } from '../../../common/variables/types';
 
 export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
     constructor(
-        public testServer: ITestServer,
         public configSettings: IConfigurationService,
         private readonly outputChannel: ITestOutputChannel,
         private readonly resultResolver?: ITestResultResolver,
@@ -43,34 +36,26 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
         executionFactory?: IPythonExecutionFactory,
         debugLauncher?: ITestDebugLauncher,
     ): Promise<ExecutionTestPayload> {
-        const uuid = this.testServer.createUUID(uri.fsPath);
         // deferredTillEOT is resolved when all data sent over payload is received
         const deferredTillEOT: Deferred<void> = utils.createTestingDeferred();
 
-        const dataReceivedDisposable = this.testServer.onRunDataReceived((e: DataReceivedEvent) => {
-            runInstance?.token.isCancellationRequested;
-            if (runInstance) {
-                const eParsed = JSON.parse(e.data);
-                this.resultResolver?.resolveExecution(eParsed, runInstance, deferredTillEOT);
+        const { name, dispose } = await utils.startRunResultNamedPipe((data: ExecutionTestPayload | EOTTestPayload) => {
+            if ('eot' in data && data.eot === true) {
+                deferredTillEOT.resolve();
+                return;
+            }
+            if (runInstance && !runInstance.token.isCancellationRequested) {
+                this.resultResolver?.resolveExecution(data, runInstance);
             } else {
                 traceError(`No run instance found, cannot resolve execution, for workspace ${uri.fsPath}.`);
             }
-        });
-        const disposeDataReceiver = function (testServer: ITestServer) {
-            traceInfo(`Disposing data receiver for ${uri.fsPath} and deleting UUID; pytest execution.`);
-            testServer.deleteUUID(uuid);
-            dataReceivedDisposable.dispose();
-        };
-        runInstance?.token.onCancellationRequested(() => {
-            traceInfo(`Test run cancelled, resolving 'till EOT' deferred for ${uri.fsPath}.`);
-            deferredTillEOT.resolve();
-        });
+        }, runInstance?.token);
 
         try {
             await this.runTestsNew(
                 uri,
                 testIds,
-                uuid,
+                name,
                 runInstance,
                 debugBool,
                 executionFactory,
@@ -79,8 +64,8 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
             );
         } finally {
             await deferredTillEOT.promise;
+            dispose();
             traceVerbose('deferredTill EOT resolved');
-            disposeDataReceiver(this.testServer);
         }
 
         // placeholder until after the rewrite is adopted
@@ -96,7 +81,7 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
     private async runTestsNew(
         uri: Uri,
         testIds: string[],
-        uuid: string,
+        resultNamedPipeName: string,
         runInstance?: TestRun,
         debugBool?: boolean,
         executionFactory?: IPythonExecutionFactory,
@@ -116,8 +101,7 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
         const pythonPathParts: string[] = mutableEnv.PYTHONPATH?.split(path.delimiter) ?? [];
         const pythonPathCommand = [fullPluginPath, ...pythonPathParts].join(path.delimiter);
         mutableEnv.PYTHONPATH = pythonPathCommand;
-        mutableEnv.TEST_UUID = uuid.toString();
-        mutableEnv.TEST_PORT = this.testServer.getPort().toString();
+        mutableEnv.TEST_RUN_PIPE = resultNamedPipeName;
 
         // Create the Python environment in which to execute the command.
         const creationOptions: ExecutionFactoryCreateWithEnvironmentOptions = {
@@ -154,15 +138,11 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
             };
 
             if (debugBool) {
-                const pytestPort = this.testServer.getPort().toString();
-                const pytestUUID = uuid.toString();
                 const launchOptions: LaunchOptions = {
                     cwd,
                     args: testArgs,
                     token: spawnOptions.token,
                     testProvider: PYTEST_PROVIDER,
-                    pytestPort,
-                    pytestUUID,
                     runTestIdsPort: testIdsPipeName,
                 };
                 traceInfo(
@@ -224,15 +204,13 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
                         traceError(
                             `Subprocess closed unsuccessfully with exit code ${code} and signal ${signal} for workspace ${uri.fsPath}. Creating and sending error execution payload \n`,
                         );
-                        this.testServer.triggerRunDataReceivedEvent({
-                            uuid,
-                            data: JSON.stringify(utils.createExecutionErrorPayload(code, signal, testIds, cwd)),
-                        });
-                        // then send a EOT payload
-                        this.testServer.triggerRunDataReceivedEvent({
-                            uuid,
-                            data: JSON.stringify(utils.createEOTPayload(true)),
-                        });
+
+                        if (runInstance) {
+                            this.resultResolver?.resolveExecution(
+                                utils.createExecutionErrorPayload(code, signal, testIds, cwd),
+                                runInstance,
+                            );
+                        }
                     }
                     // deferredTillEOT is resolved when all data sent on stdout and stderr is received, close event is only called when this occurs
                     // due to the sync reading of the output.

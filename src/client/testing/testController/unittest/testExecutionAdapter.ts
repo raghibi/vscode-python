@@ -42,7 +42,7 @@ export class UnittestTestExecutionAdapter implements ITestExecutionAdapter {
         const deferredTillEOT: Deferred<void> = createDeferred<void>();
         const disposedDataReceived = this.testServer.onRunDataReceived((e: DataReceivedEvent) => {
             if (runInstance) {
-                this.resultResolver?.resolveExecution(JSON.parse(e.data), runInstance, deferredTillEOT);
+                this.resultResolver?.resolveExecution(JSON.parse(e.data), runInstance);
             } else {
                 traceError('No run instance found, cannot resolve execution.');
             }

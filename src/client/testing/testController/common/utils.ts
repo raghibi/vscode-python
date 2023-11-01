@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 import * as net from 'net';
 import * as path from 'path';
-import { CancellationToken, Position, TestController, TestItem, Uri, Range } from 'vscode';
+import { CancellationToken, Position, TestController, TestItem, Uri, Range, Disposable } from 'vscode';
 import { Message } from 'vscode-jsonrpc';
 import { traceError, traceLog, traceVerbose } from '../../../logging';
 
@@ -185,6 +185,86 @@ export async function startTestIdsNamedPipe(testIds: string[]): Promise<string> 
             });
     });
     return pipeName;
+}
+
+interface ExecutionResultMessage extends Message {
+    params: ExecutionTestPayload | EOTTestPayload;
+}
+
+export async function startRunResultNamedPipe(
+    callback: (payload: ExecutionTestPayload | EOTTestPayload) => void,
+    cancellationToken?: CancellationToken,
+): Promise<{ name: string } & Disposable> {
+    const pipeName: string = generateRandomPipeName('python-test-results');
+    const server = await createNamedPipeServer(pipeName);
+    let dispose: () => void = () => {
+        /* noop */
+    };
+    server.onConnected().then(([reader, _writer]) => {
+        traceVerbose(`Test Result named pipe ${pipeName} connected`);
+        let disposables: (Disposable | undefined)[] = [reader];
+        dispose = () => {
+            traceVerbose(`Test Result named pipe ${pipeName} disposed`);
+            disposables.forEach((d) => d?.dispose());
+            disposables = [];
+        };
+        disposables.push(
+            cancellationToken?.onCancellationRequested(() => {
+                traceVerbose(`Test Result named pipe ${pipeName}  cancelled`);
+                dispose();
+            }),
+            reader.listen((data: Message) => {
+                traceVerbose(`Test Result named pipe ${pipeName} received data`);
+                callback((data as ExecutionResultMessage).params as ExecutionTestPayload | EOTTestPayload);
+            }),
+            reader.onClose(() => {
+                callback(createEOTPayload(true));
+                traceVerbose(`Test Result named pipe ${pipeName} closed`);
+                dispose();
+            }),
+        );
+    });
+    return { name: pipeName, dispose };
+}
+
+interface DiscoveryResultMessage extends Message {
+    params: DiscoveredTestPayload | EOTTestPayload;
+}
+
+export async function startDiscoveryNamedPipe(
+    callback: (payload: DiscoveredTestPayload | EOTTestPayload) => void,
+    cancellationToken?: CancellationToken,
+): Promise<{ name: string } & Disposable> {
+    const pipeName: string = generateRandomPipeName('python-test-discovery');
+    const server = await createNamedPipeServer(pipeName);
+    let dispose: () => void = () => {
+        /* noop */
+    };
+    server.onConnected().then(([reader, _writer]) => {
+        traceVerbose(`Test Discovery named pipe ${pipeName} connected`);
+        let disposables: (Disposable | undefined)[] = [reader];
+        dispose = () => {
+            traceVerbose(`Test Discovery named pipe ${pipeName} disposed`);
+            disposables.forEach((d) => d?.dispose());
+            disposables = [];
+        };
+        disposables.push(
+            cancellationToken?.onCancellationRequested(() => {
+                traceVerbose(`Test Discovery named pipe ${pipeName}  cancelled`);
+                dispose();
+            }),
+            reader.listen((data: Message) => {
+                traceVerbose(`Test Discovery named pipe ${pipeName} received data`);
+                callback((data as DiscoveryResultMessage).params as DiscoveredTestPayload | EOTTestPayload);
+            }),
+            reader.onClose(() => {
+                callback(createEOTPayload(true));
+                traceVerbose(`Test Discovery named pipe ${pipeName} closed`);
+                dispose();
+            }),
+        );
+    });
+    return { name: pipeName, dispose };
 }
 
 export async function startTestIdServer(testIds: string[]): Promise<number> {

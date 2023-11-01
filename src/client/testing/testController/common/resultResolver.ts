@@ -14,14 +14,13 @@ import {
 import * as util from 'util';
 import { DiscoveredTestPayload, EOTTestPayload, ExecutionTestPayload, ITestResultResolver } from './types';
 import { TestProvider } from '../../types';
-import { traceError, traceLog } from '../../../logging';
+import { traceError } from '../../../logging';
 import { Testing } from '../../../common/utils/localize';
 import { clearAllChildren, createErrorTestItem, getTestCaseNodes } from './testItemUtilities';
 import { sendTelemetryEvent } from '../../../telemetry';
 import { EventName } from '../../../telemetry/constants';
 import { splitLines } from '../../../common/stringUtils';
 import { buildErrorNodeOptions, populateTestTree, splitTestNameWithRegex } from './utils';
-import { Deferred } from '../../../common/utils/async';
 
 export class PythonResultResolver implements ITestResultResolver {
     testController: TestController;
@@ -45,28 +44,16 @@ export class PythonResultResolver implements ITestResultResolver {
         this.vsIdToRunId = new Map<string, string>();
     }
 
-    public resolveDiscovery(
-        payload: DiscoveredTestPayload | EOTTestPayload,
-        deferredTillEOT: Deferred<void>,
-        token?: CancellationToken,
-    ): Promise<void> {
+    public resolveDiscovery(payload: DiscoveredTestPayload | EOTTestPayload, token?: CancellationToken): void {
         if (!payload) {
             // No test data is available
-            return Promise.resolve();
+            return;
         }
-        if ('eot' in payload) {
-            // the payload is an EOT payload, so resolve the deferred promise.
-            traceLog('ResultResolver EOT received for discovery.');
-            const eotPayload = payload as EOTTestPayload;
-            if (eotPayload.eot === true) {
-                deferredTillEOT.resolve();
-                return Promise.resolve();
-            }
-        }
-        return this._resolveDiscovery(payload as DiscoveredTestPayload, token);
+
+        this._resolveDiscovery(payload as DiscoveredTestPayload, token);
     }
 
-    public _resolveDiscovery(payload: DiscoveredTestPayload, token?: CancellationToken): Promise<void> {
+    public _resolveDiscovery(payload: DiscoveredTestPayload, token?: CancellationToken): void {
         const workspacePath = this.workspaceUri.fsPath;
         const rawTestData = payload as DiscoveredTestPayload;
         // Check if there were any errors in the discovery process.
@@ -109,27 +96,13 @@ export class PythonResultResolver implements ITestResultResolver {
             tool: this.testProvider,
             failed: false,
         });
-        return Promise.resolve();
     }
 
-    public resolveExecution(
-        payload: ExecutionTestPayload | EOTTestPayload,
-        runInstance: TestRun,
-        deferredTillEOT: Deferred<void>,
-    ): Promise<void> {
-        if (payload !== undefined && 'eot' in payload) {
-            // the payload is an EOT payload, so resolve the deferred promise.
-            traceLog('ResultResolver EOT received for execution.');
-            const eotPayload = payload as EOTTestPayload;
-            if (eotPayload.eot === true) {
-                deferredTillEOT.resolve();
-                return Promise.resolve();
-            }
-        }
-        return this._resolveExecution(payload as ExecutionTestPayload, runInstance);
+    public resolveExecution(payload: ExecutionTestPayload | EOTTestPayload, runInstance: TestRun): void {
+        this._resolveExecution(payload as ExecutionTestPayload, runInstance);
     }
 
-    public _resolveExecution(payload: ExecutionTestPayload, runInstance: TestRun): Promise<void> {
+    public _resolveExecution(payload: ExecutionTestPayload, runInstance: TestRun): void {
         const rawTestExecData = payload as ExecutionTestPayload;
         if (rawTestExecData !== undefined && rawTestExecData.result !== undefined) {
             // Map which holds the subtest information for each test item.
@@ -279,6 +252,5 @@ export class PythonResultResolver implements ITestResultResolver {
                 }
             }
         }
-        return Promise.resolve();
     }
 }

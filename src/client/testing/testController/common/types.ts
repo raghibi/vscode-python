@@ -14,7 +14,6 @@ import {
 } from 'vscode';
 import { ITestDebugLauncher, TestDiscoveryOptions } from '../../common/types';
 import { IPythonExecutionFactory } from '../../../common/process/types';
-import { Deferred } from '../../../common/utils/async';
 import { EnvironmentVariables } from '../../../common/variables/types';
 
 export type TestRunInstanceOptions = TestRunOptions & {
@@ -195,18 +194,10 @@ export interface ITestResultResolver {
     runIdToVSid: Map<string, string>;
     runIdToTestItem: Map<string, TestItem>;
     vsIdToRunId: Map<string, string>;
-    resolveDiscovery(
-        payload: DiscoveredTestPayload | EOTTestPayload,
-        deferredTillEOT: Deferred<void>,
-        token?: CancellationToken,
-    ): Promise<void>;
-    resolveExecution(
-        payload: ExecutionTestPayload | EOTTestPayload,
-        runInstance: TestRun,
-        deferredTillEOT: Deferred<void>,
-    ): Promise<void>;
-    _resolveDiscovery(payload: DiscoveredTestPayload, token?: CancellationToken): Promise<void>;
-    _resolveExecution(payload: ExecutionTestPayload, runInstance: TestRun): Promise<void>;
+    resolveDiscovery(payload: DiscoveredTestPayload | EOTTestPayload, token?: CancellationToken): void;
+    resolveExecution(payload: ExecutionTestPayload | EOTTestPayload, runInstance: TestRun): void;
+    _resolveDiscovery(payload: DiscoveredTestPayload, token?: CancellationToken): void;
+    _resolveExecution(payload: ExecutionTestPayload, runInstance: TestRun): void;
 }
 export interface ITestDiscoveryAdapter {
     // ** first line old method signature, second line new method signature

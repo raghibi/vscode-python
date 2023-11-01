@@ -50,7 +50,7 @@ export class UnittestTestDiscoveryAdapter implements ITestDiscoveryAdapter {
         };
 
         const dataReceivedDisposable = this.testServer.onDiscoveryDataReceived((e: DataReceivedEvent) => {
-            this.resultResolver?.resolveDiscovery(JSON.parse(e.data), deferredTillEOT);
+            this.resultResolver?.resolveDiscovery(JSON.parse(e.data));
         });
         const disposeDataReceiver = function (testServer: ITestServer) {
             testServer.deleteUUID(uuid);

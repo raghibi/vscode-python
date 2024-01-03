@@ -5,9 +5,12 @@ import atexit
 import json
 import os
 import pathlib
+import socket
 import sys
 import traceback
 
+# set the socket before it gets blocked or overwritten by a user tests
+_SOCKET = socket.socket
 import pytest
 
 script_dir = pathlib.Path(__file__).parent.parent
@@ -16,12 +19,6 @@ sys.path.append(os.fspath(script_dir / "lib" / "python"))
 
 from typing import Any, Dict, List, Optional, Union
 from typing_extensions import Literal, TypedDict
-
-
-# import debugpy
-
-# debugpy.connect(5678)
-# debugpy.wait_for_client()
 
 
 class TestData(TypedDict):
@@ -67,7 +64,7 @@ def pytest_load_initial_conftests(early_config, parser, args):
         "PYTEST ERROR: TEST_RUN_PIPE is not set at the time of pytest starting. "
         "Please confirm this environment variable is not being changed or removed "
         "as it is required for successful test discovery and execution."
-        f" \TEST_RUN_PIPE = {TEST_RUN_PIPE}\n"
+        f"TEST_RUN_PIPE = {TEST_RUN_PIPE}\n"
     )
     print(error_string, file=sys.stderr)
     if "--collect-only" in args:
@@ -723,7 +720,7 @@ def send_post_request(
             "PYTEST ERROR: TEST_RUN_PIPE is not set at the time of pytest starting. "
             "Please confirm this environment variable is not being changed or removed "
             "as it is required for successful test discovery and execution."
-            f" \TEST_RUN_PIPE = {TEST_RUN_PIPE}\n"
+            f"TEST_RUN_PIPE = {TEST_RUN_PIPE}\n"
         )
         print(error_msg, file=sys.stderr)
         raise VSCodePytestError(error_msg)
@@ -732,7 +729,8 @@ def send_post_request(
 
     if __writer is None:
         try:
-            __writer = open(TEST_RUN_PIPE, "wt", encoding="utf-8")
+            __writer = PipeManager(TEST_RUN_PIPE)
+            __writer.connect()
         except Exception as error:
             error_msg = f"Error attempting to connect to extension named pipe {TEST_RUN_PIPE}[vscode-pytest]: {error}"
             print(error_msg, file=sys.stderr)
@@ -750,15 +748,10 @@ def send_post_request(
         "params": payload,
     }
     data = json.dumps(rpc, cls=cls_encoder)
-    request = f"""content-length: {len(data)}
-content-type: application/json
-
-{data}"""
 
     try:
         if __writer:
-            __writer.write(request)
-            __writer.flush()
+            __writer.write(data)
         else:
             print(
                 f"Plugin error connection error[vscode-pytest], writer is None \n[vscode-pytest] data: \n{request} \n",
@@ -769,3 +762,39 @@ content-type: application/json
             f"Plugin error, exception thrown while attempting to send data[vscode-pytest]: {error} \n[vscode-pytest] data: \n{request}\n",
             file=sys.stderr,
         )
+
+
+class PipeManager:
+    def __init__(self, name):
+        self.name = name
+
+    def __enter__(self):
+        return self.connect()
+
+    def __exit__(self, *_):
+        self.close()
+
+    def connect(self):
+        if sys.platform == "win32":
+            self._writer = open(self.name, "wt", encoding="utf-8")
+        else:
+            self._socket = _SOCKET(socket.AF_UNIX, socket.SOCK_STREAM)
+        self._socket.connect(self.name)
+        return self
+
+    def close(self):
+        if sys.platform == "win32":
+            self._writer.close()
+        else:
+            # add exception catch
+            self._socket.close()
+
+    def write(self, data: str):
+        # must include the carriage-return defined (as \r\n) for unix systems
+        request = f"""content-length: {len(data)}\r\ncontent-type: application/json\r\n\r\n{data}"""
+        if sys.platform == "win32":
+            self._writer.write(request)
+            self._writer.flush()
+        else:
+            self._socket.send(request.encode("utf-8"))
+            # does this also need a flush on the socket?

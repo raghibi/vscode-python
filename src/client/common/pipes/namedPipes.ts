@@ -38,7 +38,8 @@ export function createNamedPipeServer(pipeName: string): Promise<NamesPipeConnec
 
 const { XDG_RUNTIME_DIR } = process.env;
 export function generateRandomPipeName(prefix: string): string {
-    const randomSuffix = crypto.randomBytes(21).toString('hex');
+    // length of 10 picked because of the name length restriction for sockets
+    const randomSuffix = crypto.randomBytes(10).toString('hex');
     if (prefix.length === 0) {
         prefix = 'python-ext-rpc';
     }

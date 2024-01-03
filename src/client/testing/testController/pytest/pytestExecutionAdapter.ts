@@ -50,6 +50,10 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
                 traceError(`No run instance found, cannot resolve execution, for workspace ${uri.fsPath}.`);
             }
         }, runInstance?.token);
+        runInstance?.token.onCancellationRequested(() => {
+            traceInfo(`Test run cancelled, resolving 'till EOT' deferred for ${uri.fsPath}.`);
+            deferredTillEOT.resolve();
+        });
 
         try {
             await this.runTestsNew(

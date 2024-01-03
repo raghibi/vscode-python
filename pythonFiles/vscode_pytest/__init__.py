@@ -9,14 +9,14 @@ import socket
 import sys
 import traceback
 
-# set the socket before it gets blocked or overwritten by a user tests
-_SOCKET = socket.socket
+
 import pytest
 
 script_dir = pathlib.Path(__file__).parent.parent
 sys.path.append(os.fspath(script_dir))
 sys.path.append(os.fspath(script_dir / "lib" / "python"))
 
+from testing_tools import socket_manager
 from typing import Any, Dict, List, Optional, Union
 from typing_extensions import Literal, TypedDict
 
@@ -729,7 +729,7 @@ def send_post_request(
 
     if __writer is None:
         try:
-            __writer = PipeManager(TEST_RUN_PIPE)
+            __writer = socket_manager.PipeManager(TEST_RUN_PIPE)
             __writer.connect()
         except Exception as error:
             error_msg = f"Error attempting to connect to extension named pipe {TEST_RUN_PIPE}[vscode-pytest]: {error}"
@@ -762,39 +762,3 @@ def send_post_request(
             f"Plugin error, exception thrown while attempting to send data[vscode-pytest]: {error} \n[vscode-pytest] data: \n{request}\n",
             file=sys.stderr,
         )
-
-
-class PipeManager:
-    def __init__(self, name):
-        self.name = name
-
-    def __enter__(self):
-        return self.connect()
-
-    def __exit__(self, *_):
-        self.close()
-
-    def connect(self):
-        if sys.platform == "win32":
-            self._writer = open(self.name, "wt", encoding="utf-8")
-        else:
-            self._socket = _SOCKET(socket.AF_UNIX, socket.SOCK_STREAM)
-        self._socket.connect(self.name)
-        return self
-
-    def close(self):
-        if sys.platform == "win32":
-            self._writer.close()
-        else:
-            # add exception catch
-            self._socket.close()
-
-    def write(self, data: str):
-        # must include the carriage-return defined (as \r\n) for unix systems
-        request = f"""content-length: {len(data)}\r\ncontent-type: application/json\r\n\r\n{data}"""
-        if sys.platform == "win32":
-            self._writer.write(request)
-            self._writer.flush()
-        else:
-            self._socket.send(request.encode("utf-8"))
-            # does this also need a flush on the socket?

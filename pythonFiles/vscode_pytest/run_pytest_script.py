@@ -12,6 +12,8 @@ script_dir = pathlib.Path(__file__).parent.parent
 sys.path.append(os.fspath(script_dir))
 sys.path.append(os.fspath(script_dir / "lib" / "python"))
 from testing_tools import process_json_util
+from testing_tools import socket_manager
+
 
 # This script handles running pytest via pytest.main(). It is called via run in the
 # pytest execution adapter and gets the test_ids to run via stdin and the rest of the
@@ -25,15 +27,18 @@ if __name__ == "__main__":
     # Get the rest of the args to run with pytest.
     args = sys.argv[1:]
     run_test_ids_pipe = os.environ.get("RUN_TEST_IDS_PIPE")
+    print("HELLO!", run_test_ids_pipe)
     if not run_test_ids_pipe:
         print("Error[vscode-pytest]: RUN_TEST_IDS_PIPE env var is not set.")
     raw_json = {}
     try:
-        with open(run_test_ids_pipe, "rb") as pipe:
+        socket_name = os.environ.get("RUN_TEST_IDS_PIPE")
+        with socket_manager.PipeManager(socket_name) as sock:
+            print("made it here")
             buffer = b""
             while True:
                 # Receive the data from the client
-                data = pipe.read()
+                data = sock.read()
                 if not data:
                     break
 

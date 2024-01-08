@@ -43,6 +43,27 @@ class PipeManager:
             self._socket.send(request.encode("utf-8"))
             # does this also need a flush on the socket?
 
+    def read(self, bufsize=1024):
+        """Read data from the socket.
+
+        Args:
+            bufsize (int): Number of bytes to read from the socket.
+
+        Returns:
+            data (bytes): Data received from the socket.
+        """
+        if sys.platform == "win32":
+            return self._reader.read(bufsize)
+        else:
+            data = b""
+            while True:
+                part = self._socket.recv(bufsize)
+                data += part
+                if len(part) < bufsize:
+                    # No more data, or less than bufsize data received
+                    break
+            return data
+
 
 class SocketManager(object):
     """Create a socket and connect to the given address.

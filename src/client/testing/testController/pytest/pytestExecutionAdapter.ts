@@ -38,21 +38,32 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
     ): Promise<ExecutionTestPayload> {
         // deferredTillEOT is resolved when all data sent over payload is received
         const deferredTillEOT: Deferred<void> = utils.createTestingDeferred();
+        const deferredTillAllServerClose: Deferred<void> = utils.createTestingDeferred();
 
-        const { name, dispose } = await utils.startRunResultNamedPipe((data: ExecutionTestPayload | EOTTestPayload) => {
-            if ('eot' in data && data.eot === true) {
-                deferredTillEOT.resolve();
-                return;
-            }
-            if (runInstance && !runInstance.token.isCancellationRequested) {
-                this.resultResolver?.resolveExecution(data, runInstance);
-            } else {
-                traceError(`No run instance found, cannot resolve execution, for workspace ${uri.fsPath}.`);
-            }
-        }, runInstance?.token);
+        const { name, dispose } = await utils.startRunResultNamedPipe(
+            (data: ExecutionTestPayload | EOTTestPayload) => {
+                if ('eot' in data && data.eot === true) {
+                    // this resolves deferredTillEOT after single connection closed
+                    // is there even a way to confirm all data has been sent from all connections?
+                    // this would require tracking EOT # and comparing to connectionCount which seems too hard / unneeded
+                    deferredTillEOT.resolve();
+                    console.log('eot reached');
+                } else if (runInstance && !runInstance.token.isCancellationRequested) {
+                    this.resultResolver?.resolveExecution(data, runInstance);
+                    console.log('resolve data', data);
+                } else {
+                    traceError(`No run instance found, cannot resolve execution, for workspace ${uri.fsPath}.`);
+                }
+            },
+            deferredTillAllServerClose,
+            runInstance?.token,
+        );
         runInstance?.token.onCancellationRequested(() => {
             traceInfo(`Test run cancelled, resolving 'till EOT' deferred for ${uri.fsPath}.`);
+            // if canceled, stop listening for results
             deferredTillEOT.resolve();
+            // if canceled, close the server, resolves the deferredTillAllServerClose
+            dispose();
         });
 
         try {
@@ -67,8 +78,12 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
                 deferredTillEOT,
             );
         } finally {
+            // wait for data and all connections to close
             await deferredTillEOT.promise;
-            dispose();
+            await deferredTillAllServerClose.promise;
+            console.log("past 'till EOT' promise, going for disposal");
+            // connectionCount;
+
             traceVerbose('deferredTill EOT resolved');
         }
 
@@ -219,6 +234,7 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
                     // deferredTillEOT is resolved when all data sent on stdout and stderr is received, close event is only called when this occurs
                     // due to the sync reading of the output.
                     deferredTillExecClose?.resolve();
+                    console.log('closing deferredTillExecClose');
                 });
                 await deferredTillExecClose?.promise;
             }

@@ -9,19 +9,36 @@ import * as rpc from 'vscode-jsonrpc/node';
 import { traceVerbose } from '../../logging';
 
 export interface NamesPipeConnected {
-    onConnected(): Promise<[rpc.MessageReader, rpc.MessageWriter]>;
+    onClosed(): Promise<void>;
 }
 
-export function createNamedPipeServer(pipeName: string): Promise<NamesPipeConnected> {
+export function createNamedPipeServer(
+    pipeName: string,
+    connectedCallback: (value: [rpc.MessageReader, rpc.MessageWriter]) => void,
+): Promise<NamesPipeConnected> {
     traceVerbose(`Creating named pipe server on ${pipeName}`);
-    let connectResolve: (value: [rpc.MessageReader, rpc.MessageWriter]) => void;
-    const connected = new Promise<[rpc.MessageReader, rpc.MessageWriter]>((resolve, _reject) => {
-        connectResolve = resolve;
+    let closedResolve: () => void;
+    const closed = new Promise<void>((resolve, _reject) => {
+        closedResolve = resolve;
     });
+
+    let connectionCount = 0;
     return new Promise((resolve, reject) => {
         const server = net.createServer((socket) => {
-            server.close();
-            connectResolve([
+            connectionCount += 1;
+            console.log('connectionCount +1 = ', connectionCount);
+            socket.on('close', () => {
+                connectionCount -= 1;
+                console.log('connectionCount -1 = ', connectionCount);
+                if (connectionCount <= 0) {
+                    console.log('all sockets are now closed 0 on the count!, closing resolver?');
+                    server.close();
+                    // this closedResolve calls the dispose method in the clients
+                    closedResolve();
+                }
+            });
+            // not recieving the reader writer for all connections
+            connectedCallback([
                 new rpc.SocketMessageReader(socket, 'utf-8'),
                 new rpc.SocketMessageWriter(socket, 'utf-8'),
             ]);
@@ -30,7 +47,7 @@ export function createNamedPipeServer(pipeName: string): Promise<NamesPipeConnec
         server.listen(pipeName, () => {
             server.removeListener('error', reject);
             resolve({
-                onConnected: () => connected,
+                onClosed: () => closed,
             });
         });
     });

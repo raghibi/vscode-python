@@ -66,7 +66,8 @@ def pytest_load_initial_conftests(early_config, parser, args):
         "as it is required for successful test discovery and execution."
         f"TEST_RUN_PIPE = {TEST_RUN_PIPE}\n"
     )
-    print(error_string, file=sys.stderr)
+    if not TEST_RUN_PIPE:
+        print(error_string, file=sys.stderr)
     if "--collect-only" in args:
         global IS_DISCOVERY
         IS_DISCOVERY = True

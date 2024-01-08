@@ -169,8 +169,8 @@ export function pythonTestAdapterRewriteEnabled(serviceContainer: IServiceContai
 
 export async function startTestIdsNamedPipe(testIds: string[]): Promise<string> {
     const pipeName: string = generateRandomPipeName('python-test-ids');
-    const server = await createNamedPipeServer(pipeName);
-    server.onConnected().then(([_reader, writer]) => {
+    // uses callback so the on connect action occurs after the pipe is created
+    await createNamedPipeServer(pipeName, ([_reader, writer]) => {
         traceVerbose('Test Ids named pipe connected');
         writer
             .write({
@@ -193,20 +193,23 @@ interface ExecutionResultMessage extends Message {
 
 export async function startRunResultNamedPipe(
     callback: (payload: ExecutionTestPayload | EOTTestPayload) => void,
+    deferredTillAllServerClose: Deferred<void>,
     cancellationToken?: CancellationToken,
 ): Promise<{ name: string } & Disposable> {
     const pipeName: string = generateRandomPipeName('python-test-results');
-    const server = await createNamedPipeServer(pipeName);
     let dispose: () => void = () => {
         /* noop */
     };
-    server.onConnected().then(([reader, _writer]) => {
+    const server = await createNamedPipeServer(pipeName, ([reader, _writer]) => {
         traceVerbose(`Test Result named pipe ${pipeName} connected`);
         let disposables: (Disposable | undefined)[] = [reader];
+
         dispose = () => {
             traceVerbose(`Test Result named pipe ${pipeName} disposed`);
+            console.log(`Test Result named pipe ${pipeName} disposed`);
             disposables.forEach((d) => d?.dispose());
             disposables = [];
+            deferredTillAllServerClose.resolve();
         };
         disposables.push(
             cancellationToken?.onCancellationRequested(() => {
@@ -218,12 +221,28 @@ export async function startRunResultNamedPipe(
                 callback((data as ExecutionResultMessage).params as ExecutionTestPayload | EOTTestPayload);
             }),
             reader.onClose(() => {
-                callback(createEOTPayload(true));
-                traceVerbose(`Test Result named pipe ${pipeName} closed`);
-                dispose();
+                // reader is still hitting on close, I don't think we want this to happen?
+
+                // connectionCount = server.getConnectionCount();
+                // connectionCount[0] -= 1;
+                // server.setCurrentConnectionCount(connectionCount);
+                // if (connectionCount[0] === 0) {
+                // callback(createEOTPayload(true));
+                // traceVerbose(`Test Result named pipe ${pipeName} closed? idk how many tuimes tho`);
+                console.log('reader.onClose');
+                // dispose();
+                // } else {
+                //     traceVerbose('Test Result NOT closed, there are still connections');
+                // }
             }),
         );
     });
+    server.onClosed().then(() => {
+        traceVerbose(`Test Result named pipe ${pipeName} closed`);
+        console.log('server on close from utils');
+        dispose();
+    });
+
     return { name: pipeName, dispose };
 }
 
@@ -236,11 +255,10 @@ export async function startDiscoveryNamedPipe(
     cancellationToken?: CancellationToken,
 ): Promise<{ name: string } & Disposable> {
     const pipeName: string = generateRandomPipeName('python-test-discovery');
-    const server = await createNamedPipeServer(pipeName);
     let dispose: () => void = () => {
         /* noop */
     };
-    server.onConnected().then(([reader, _writer]) => {
+    await createNamedPipeServer(pipeName, ([reader, _writer]) => {
         traceVerbose(`Test Discovery named pipe ${pipeName} connected`);
         let disposables: (Disposable | undefined)[] = [reader];
         dispose = () => {

@@ -196,6 +196,7 @@ export async function startRunResultNamedPipe(
     deferredTillServerClose: Deferred<void>,
     cancellationToken?: CancellationToken,
 ): Promise<{ name: string } & Disposable> {
+    traceVerbose('Starting Test Result named pipe');
     const pipeName: string = generateRandomPipeName('python-test-results');
     let disposeOfServer: () => void = () => {
         /* noop */
@@ -208,8 +209,6 @@ export async function startRunResultNamedPipe(
 
         // create a function to dispose of the server
         disposeOfServer = () => {
-            traceVerbose(`Test Result named pipe ${pipeName} disposed`);
-            console.log(`Test Result named pipe ${pipeName} disposed`);
             // dispose of all data listeners and cancelation listeners
             perConnectionDisposables.forEach((d) => d?.dispose());
             perConnectionDisposables = [];
@@ -230,8 +229,7 @@ export async function startRunResultNamedPipe(
         );
         server.serverOnCloseCallback().then(() => {
             // this is called once the server close, once per run instance
-            traceVerbose(`Test Result named pipe ${pipeName} closed`);
-            console.log('server on close from utils');
+            traceVerbose(`Test Result named pipe ${pipeName} closed. Disposing of listener/s.`);
             // dispose of all data listeners and cancelation listeners
             disposeOfServer();
         });
@@ -248,6 +246,7 @@ export async function startDiscoveryNamedPipe(
     callback: (payload: DiscoveredTestPayload | EOTTestPayload) => void,
     cancellationToken?: CancellationToken,
 ): Promise<{ name: string } & Disposable> {
+    traceVerbose('Starting Test Discovery named pipe');
     const pipeName: string = generateRandomPipeName('python-test-discovery');
     let dispose: () => void = () => {
         /* noop */

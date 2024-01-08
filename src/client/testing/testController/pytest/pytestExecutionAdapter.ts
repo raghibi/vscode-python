@@ -43,11 +43,10 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
         const dataReceivedCallback = (data: ExecutionTestPayload | EOTTestPayload) => {
             if ('eot' in data && data.eot === true) {
                 // eot sent once per connection
+                traceVerbose('EOT received, resolving deferredTillServerClose');
                 deferredTillEOT.resolve();
-                console.log('eot reached');
             } else if (runInstance && !runInstance.token.isCancellationRequested) {
                 this.resultResolver?.resolveExecution(data, runInstance);
-                console.log('resolve data', data);
             } else {
                 traceError(`No run instance found, cannot resolve execution, for workspace ${uri.fsPath}.`);
             }

@@ -389,7 +389,7 @@ export class PythonTestController implements ITestController, IExtensionSingleAc
         );
 
         const dispose = token.onCancellationRequested(() => {
-            runInstance.appendOutput(`Run instance cancelled.\r\n`);
+            runInstance.appendOutput(`\nRun instance cancelled.\r\n`);
             runInstance.end();
         });
 
@@ -487,6 +487,7 @@ export class PythonTestController implements ITestController, IExtensionSingleAc
                 }),
             );
         } finally {
+            traceVerbose('Finished running tests, ending runInstance.');
             runInstance.appendOutput(`Finished running tests!\r\n`);
             runInstance.end();
             dispose.dispose();

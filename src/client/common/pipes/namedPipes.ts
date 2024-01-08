@@ -23,16 +23,15 @@ export function createNamedPipeServer(
         // create a server, resolves and returns server on listen
         const server = net.createServer((socket) => {
             // this lambda function is called whenever a client connects to the server
-            console.log('new client is connected to the socket: ', socket);
             connectionCount += 1;
-            console.log('connectionCount +1 = ', connectionCount);
+            traceVerbose('new client is connected to the socket, connectionCount: ', connectionCount, pipeName);
             socket.on('close', () => {
                 // close event is emitted by client to the server
                 connectionCount -= 1;
-                console.log('client emitted close event, connectionCount -1 = ', connectionCount);
+                traceVerbose('client emitted close event, connectionCount: ', connectionCount);
                 if (connectionCount <= 0) {
                     // if all clients are closed, close the server
-                    console.log('all clients connected to server are now closed, closing the server');
+                    traceVerbose('connection count is <= 0, closing the server: ', pipeName);
                     server.close();
                 }
             });
@@ -43,15 +42,9 @@ export function createNamedPipeServer(
                 new rpc.SocketMessageWriter(socket, 'utf-8'),
             ]);
         });
-        const closedServerCallback = new Promise<void>((resolveOnServerClose, _reject) => {
-            // get executed on connection close
-            console.log('connection closed');
-            server.on('close', () => {
-                // server closed occurs when all clients are closed
-                console.log('server signal closing');
-                resolveOnServerClose();
-            });
-            // is not resolved until the server is closed
+        const closedServerCallback = new Promise<void>((resolveOnServerClose) => {
+            // get executed on connection close and resolves
+            server.on('close', resolveOnServerClose);
         });
         server.on('error', reject);
 

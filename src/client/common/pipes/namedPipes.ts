@@ -8,47 +8,63 @@ import * as path from 'path';
 import * as rpc from 'vscode-jsonrpc/node';
 import { traceVerbose } from '../../logging';
 
-export interface NamesPipeConnected {
-    onClosed(): Promise<void>;
+export interface ConnectedServerObj {
+    serverOnCloseCallback(): Promise<void>;
 }
 
 export function createNamedPipeServer(
     pipeName: string,
-    connectedCallback: (value: [rpc.MessageReader, rpc.MessageWriter]) => void,
-): Promise<NamesPipeConnected> {
+    onConnectionCallback: (value: [rpc.MessageReader, rpc.MessageWriter]) => void,
+): Promise<ConnectedServerObj> {
     traceVerbose(`Creating named pipe server on ${pipeName}`);
-    let closedResolve: () => void;
-    const closed = new Promise<void>((resolve, _reject) => {
-        closedResolve = resolve;
-    });
 
     let connectionCount = 0;
     return new Promise((resolve, reject) => {
+        // create a server, resolves and returns server on listen
         const server = net.createServer((socket) => {
+            // this lambda function is called whenever a client connects to the server
+            console.log('new client is connected to the socket: ', socket);
             connectionCount += 1;
             console.log('connectionCount +1 = ', connectionCount);
             socket.on('close', () => {
+                // close event is emitted by client to the server
                 connectionCount -= 1;
-                console.log('connectionCount -1 = ', connectionCount);
+                console.log('client emitted close event, connectionCount -1 = ', connectionCount);
                 if (connectionCount <= 0) {
-                    console.log('all sockets are now closed 0 on the count!, closing resolver?');
+                    // if all clients are closed, close the server
+                    console.log('all clients connected to server are now closed, closing the server');
                     server.close();
-                    // this closedResolve calls the dispose method in the clients
-                    closedResolve();
                 }
             });
-            // not recieving the reader writer for all connections
-            connectedCallback([
+
+            // upon connection create a reader and writer and pass it to the callback
+            onConnectionCallback([
                 new rpc.SocketMessageReader(socket, 'utf-8'),
                 new rpc.SocketMessageWriter(socket, 'utf-8'),
             ]);
         });
-        server.on('error', reject);
-        server.listen(pipeName, () => {
-            server.removeListener('error', reject);
-            resolve({
-                onClosed: () => closed,
+        const closedServerCallback = new Promise<void>((resolveOnServerClose, _reject) => {
+            // get executed on connection close
+            console.log('connection closed');
+            server.on('close', () => {
+                // server closed occurs when all clients are closed
+                console.log('server signal closing');
+                resolveOnServerClose();
             });
+            // is not resolved until the server is closed
+        });
+        server.on('error', reject);
+
+        server.listen(pipeName, () => {
+            // this function is called when the server is listening
+            server.removeListener('error', reject);
+            const connectedServer = {
+                // when onClosed event is called, so is closed function
+                // goes backwards up the chain, when resolve2 is called, so is onClosed that means server.onClosed() on the other end can work
+                // event C
+                serverOnCloseCallback: () => closedServerCallback,
+            };
+            resolve(connectedServer);
         });
     });
 }

@@ -192,58 +192,52 @@ interface ExecutionResultMessage extends Message {
 }
 
 export async function startRunResultNamedPipe(
-    callback: (payload: ExecutionTestPayload | EOTTestPayload) => void,
-    deferredTillAllServerClose: Deferred<void>,
+    dataReceivedCallback: (payload: ExecutionTestPayload | EOTTestPayload) => void,
+    deferredTillServerClose: Deferred<void>,
     cancellationToken?: CancellationToken,
 ): Promise<{ name: string } & Disposable> {
     const pipeName: string = generateRandomPipeName('python-test-results');
-    let dispose: () => void = () => {
+    let disposeOfServer: () => void = () => {
         /* noop */
     };
     const server = await createNamedPipeServer(pipeName, ([reader, _writer]) => {
+        // this lambda function is: onConnectionCallback
+        // this is called once per client connecting to the server
         traceVerbose(`Test Result named pipe ${pipeName} connected`);
-        let disposables: (Disposable | undefined)[] = [reader];
+        let perConnectionDisposables: (Disposable | undefined)[] = [reader];
 
-        dispose = () => {
+        // create a function to dispose of the server
+        disposeOfServer = () => {
             traceVerbose(`Test Result named pipe ${pipeName} disposed`);
             console.log(`Test Result named pipe ${pipeName} disposed`);
-            disposables.forEach((d) => d?.dispose());
-            disposables = [];
-            deferredTillAllServerClose.resolve();
+            // dispose of all data listeners and cancelation listeners
+            perConnectionDisposables.forEach((d) => d?.dispose());
+            perConnectionDisposables = [];
+            deferredTillServerClose.resolve();
         };
-        disposables.push(
+        perConnectionDisposables.push(
+            // per connection, add a listener for the cancellation token and the data
             cancellationToken?.onCancellationRequested(() => {
                 traceVerbose(`Test Result named pipe ${pipeName}  cancelled`);
-                dispose();
+                // if cancel is called on one connection, dispose of all connections
+                disposeOfServer();
             }),
             reader.listen((data: Message) => {
                 traceVerbose(`Test Result named pipe ${pipeName} received data`);
-                callback((data as ExecutionResultMessage).params as ExecutionTestPayload | EOTTestPayload);
-            }),
-            reader.onClose(() => {
-                // reader is still hitting on close, I don't think we want this to happen?
-
-                // connectionCount = server.getConnectionCount();
-                // connectionCount[0] -= 1;
-                // server.setCurrentConnectionCount(connectionCount);
-                // if (connectionCount[0] === 0) {
-                // callback(createEOTPayload(true));
-                // traceVerbose(`Test Result named pipe ${pipeName} closed? idk how many tuimes tho`);
-                console.log('reader.onClose');
-                // dispose();
-                // } else {
-                //     traceVerbose('Test Result NOT closed, there are still connections');
-                // }
+                // if EOT, call decrement connection count (callback)
+                dataReceivedCallback((data as ExecutionResultMessage).params as ExecutionTestPayload | EOTTestPayload);
             }),
         );
-    });
-    server.onClosed().then(() => {
-        traceVerbose(`Test Result named pipe ${pipeName} closed`);
-        console.log('server on close from utils');
-        dispose();
+        server.serverOnCloseCallback().then(() => {
+            // this is called once the server close, once per run instance
+            traceVerbose(`Test Result named pipe ${pipeName} closed`);
+            console.log('server on close from utils');
+            // dispose of all data listeners and cancelation listeners
+            disposeOfServer();
+        });
     });
 
-    return { name: pipeName, dispose };
+    return { name: pipeName, dispose: disposeOfServer };
 }
 
 interface DiscoveryResultMessage extends Message {
@@ -276,6 +270,7 @@ export async function startDiscoveryNamedPipe(
                 callback((data as DiscoveryResultMessage).params as DiscoveredTestPayload | EOTTestPayload);
             }),
             reader.onClose(() => {
+                console.log('EJFB.1: reader on close event occurred!');
                 callback(createEOTPayload(true));
                 traceVerbose(`Test Discovery named pipe ${pipeName} closed`);
                 dispose();

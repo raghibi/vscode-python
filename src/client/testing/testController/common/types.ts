@@ -15,6 +15,7 @@ import {
 import { ITestDebugLauncher, TestDiscoveryOptions } from '../../common/types';
 import { IPythonExecutionFactory } from '../../../common/process/types';
 import { EnvironmentVariables } from '../../../common/variables/types';
+import { Deferred } from '../../../common/utils/async';
 
 export type TestRunInstanceOptions = TestRunOptions & {
     exclude?: readonly TestItem[];
@@ -147,7 +148,6 @@ export type TestCommandOptions = {
     workspaceFolder: Uri;
     cwd: string;
     command: TestDiscoveryCommand | TestExecutionCommand;
-    uuid: string;
     token?: CancellationToken;
     outChannel?: OutputChannel;
     debugBool?: boolean;
@@ -182,6 +182,7 @@ export interface ITestServer {
         runInstance?: TestRun,
         testIds?: string[],
         callback?: () => void,
+        executionFactory?: IPythonExecutionFactory,
     ): Promise<void>;
     serverReady(): Promise<void>;
     getPort(): number;
@@ -194,8 +195,16 @@ export interface ITestResultResolver {
     runIdToVSid: Map<string, string>;
     runIdToTestItem: Map<string, TestItem>;
     vsIdToRunId: Map<string, string>;
-    resolveDiscovery(payload: DiscoveredTestPayload | EOTTestPayload, token?: CancellationToken): void;
-    resolveExecution(payload: ExecutionTestPayload | EOTTestPayload, runInstance: TestRun): void;
+    resolveDiscovery(
+        payload: DiscoveredTestPayload | EOTTestPayload,
+        deferredTillEOT: Deferred<void>,
+        token?: CancellationToken,
+    ): void;
+    resolveExecution(
+        payload: ExecutionTestPayload | EOTTestPayload,
+        runInstance: TestRun,
+        deferredTillEOT: Deferred<void>,
+    ): void;
     _resolveDiscovery(payload: DiscoveredTestPayload, token?: CancellationToken): void;
     _resolveExecution(payload: ExecutionTestPayload, runInstance: TestRun): void;
 }

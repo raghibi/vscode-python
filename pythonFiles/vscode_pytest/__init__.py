@@ -5,7 +5,6 @@ import atexit
 import json
 import os
 import pathlib
-import socket
 import sys
 import traceback
 
@@ -19,6 +18,11 @@ sys.path.append(os.fspath(script_dir / "lib" / "python"))
 from testing_tools import socket_manager
 from typing import Any, Dict, List, Optional, Union
 from typing_extensions import Literal, TypedDict
+
+# import debugpy
+
+# debugpy.listen(5678)
+# debugpy.breakpoint()
 
 
 class TestData(TypedDict):
@@ -755,11 +759,11 @@ def send_post_request(
             __writer.write(data)
         else:
             print(
-                f"Plugin error connection error[vscode-pytest], writer is None \n[vscode-pytest] data: \n{request} \n",
+                f"Plugin error connection error[vscode-pytest], writer is None \n[vscode-pytest] data: \n{data} \n",
                 file=sys.stderr,
             )
     except Exception as error:
         print(
-            f"Plugin error, exception thrown while attempting to send data[vscode-pytest]: {error} \n[vscode-pytest] data: \n{request}\n",
+            f"Plugin error, exception thrown while attempting to send data[vscode-pytest]: {error} \n[vscode-pytest] data: \n{data}\n",
             file=sys.stderr,
         )

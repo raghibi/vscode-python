@@ -199,6 +199,7 @@ export async function startRunResultNamedPipe(
     traceVerbose('Starting Test Result named pipe');
     const pipeName: string = generateRandomPipeName('python-test-results');
     let disposeOfServer: () => void = () => {
+        deferredTillServerClose.resolve();
         /* noop */
     };
     const server = await createNamedPipeServer(pipeName, ([reader, _writer]) => {
@@ -217,7 +218,7 @@ export async function startRunResultNamedPipe(
         perConnectionDisposables.push(
             // per connection, add a listener for the cancellation token and the data
             cancellationToken?.onCancellationRequested(() => {
-                traceVerbose(`Test Result named pipe ${pipeName}  cancelled`);
+                console.log(`Test Result named pipe ${pipeName}  cancelled`);
                 // if cancel is called on one connection, dispose of all connections
                 disposeOfServer();
             }),
@@ -227,7 +228,7 @@ export async function startRunResultNamedPipe(
                 dataReceivedCallback((data as ExecutionResultMessage).params as ExecutionTestPayload | EOTTestPayload);
             }),
         );
-        server.serverOnCloseCallback().then(() => {
+        server.serverOnClosePromise().then(() => {
             // this is called once the server close, once per run instance
             traceVerbose(`Test Result named pipe ${pipeName} closed. Disposing of listener/s.`);
             // dispose of all data listeners and cancelation listeners
@@ -269,7 +270,6 @@ export async function startDiscoveryNamedPipe(
                 callback((data as DiscoveryResultMessage).params as DiscoveredTestPayload | EOTTestPayload);
             }),
             reader.onClose(() => {
-                console.log('EJFB.1: reader on close event occurred!');
                 callback(createEOTPayload(true));
                 traceVerbose(`Test Discovery named pipe ${pipeName} closed`);
                 dispose();

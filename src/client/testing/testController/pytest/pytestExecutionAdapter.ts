@@ -36,33 +36,28 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
         executionFactory?: IPythonExecutionFactory,
         debugLauncher?: ITestDebugLauncher,
     ): Promise<ExecutionTestPayload> {
-        // deferredTillEOT is resolved when all data sent over payload is received
+        // deferredTillEOT awaits EOT message and deferredTillServerClose awaits named pipe server close
         const deferredTillEOT: Deferred<void> = utils.createTestingDeferred();
         const deferredTillServerClose: Deferred<void> = utils.createTestingDeferred();
 
+        // create callback to handle data received on the named pipe
         const dataReceivedCallback = (data: ExecutionTestPayload | EOTTestPayload) => {
-            if ('eot' in data && data.eot === true) {
-                // eot sent once per connection
-                traceVerbose('EOT received, resolving deferredTillServerClose');
-                deferredTillEOT.resolve();
-            } else if (runInstance && !runInstance.token.isCancellationRequested) {
-                this.resultResolver?.resolveExecution(data, runInstance);
+            if (runInstance && !runInstance.token.isCancellationRequested) {
+                this.resultResolver?.resolveExecution(data, runInstance, deferredTillEOT);
             } else {
                 traceError(`No run instance found, cannot resolve execution, for workspace ${uri.fsPath}.`);
             }
         };
-        const { name, dispose } = await utils.startRunResultNamedPipe(
-            dataReceivedCallback,
-            deferredTillServerClose,
-            runInstance?.token,
+        const { name, dispose: serverDispose } = await utils.startRunResultNamedPipe(
+            dataReceivedCallback, // callback to handle data received
+            deferredTillServerClose, // deferred to resolve when server closes
+            runInstance?.token, // token to cancel
         );
-        // does it get here?? Does it get stuck
         runInstance?.token.onCancellationRequested(() => {
-            traceInfo(`Test run cancelled, resolving 'till EOT' deferred for ${uri.fsPath}.`);
+            console.log(`Test run cancelled, resolving 'till EOT' deferred for ${uri.fsPath}.`);
             // if canceled, stop listening for results
             deferredTillEOT.resolve();
-            // if canceled, close the server, resolves the deferredTillAllServerClose
-            dispose();
+            serverDispose(); // this will resolve deferredTillServerClose
         });
 
         try {
@@ -70,18 +65,19 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
                 uri,
                 testIds,
                 name,
+                deferredTillEOT,
+                serverDispose,
                 runInstance,
                 debugBool,
                 executionFactory,
                 debugLauncher,
-                deferredTillEOT,
             );
         } finally {
             // wait for to send EOT
             await deferredTillEOT.promise;
-            traceVerbose('deferredTill EOT resolved');
+            console.log('deferredTill EOT resolved');
             await deferredTillServerClose.promise;
-            traceVerbose('Server closed await now resolved');
+            console.log('Server closed await now resolved');
         }
 
         // placeholder until after the rewrite is adopted
@@ -98,11 +94,12 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
         uri: Uri,
         testIds: string[],
         resultNamedPipeName: string,
+        deferredTillEOT: Deferred<void>,
+        serverDispose: () => void,
         runInstance?: TestRun,
         debugBool?: boolean,
         executionFactory?: IPythonExecutionFactory,
         debugLauncher?: ITestDebugLauncher,
-        deferredTillEOT?: Deferred<void>,
     ): Promise<ExecutionTestPayload> {
         const relativePathToPytest = 'pythonFiles';
         const fullPluginPath = path.join(EXTENSION_ROOT_DIR, relativePathToPytest);
@@ -160,11 +157,13 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
                     token: spawnOptions.token,
                     testProvider: PYTEST_PROVIDER,
                     runTestIdsPort: testIdsPipeName,
+                    pytestPort: resultNamedPipeName,
                 };
                 traceInfo(
                     `Running DEBUG pytest with arguments: ${testArgs.join(' ')} for workspace ${uri.fsPath} \r\n`,
                 );
                 await debugLauncher!.launchDebugger(launchOptions, () => {
+                    serverDispose(); // this will resolve deferredTillServerClose
                     deferredTillEOT?.resolve();
                 });
             } else {
@@ -178,12 +177,12 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
                 let resultProc: ChildProcess | undefined;
 
                 runInstance?.token.onCancellationRequested(() => {
-                    traceInfo(`Test run cancelled, killing pytest subprocess for workspace ${uri.fsPath}`);
+                    console.log(`Test run cancelled, killing pytest subprocess for workspace ${uri.fsPath}`);
                     // if the resultProc exists just call kill on it which will handle resolving the ExecClose deferred, otherwise resolve the deferred here.
                     if (resultProc) {
                         resultProc?.kill();
                     } else {
-                        deferredTillExecClose?.resolve();
+                        deferredTillExecClose.resolve();
                     }
                 });
 
@@ -204,6 +203,7 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
                     this.outputChannel?.append(out);
                 });
                 result?.proc?.on('exit', (code, signal) => {
+                    console.log('exit occurred');
                     this.outputChannel?.append(utils.MESSAGE_ON_TESTING_OUTPUT_MOVE);
                     if (code !== 0 && testIds) {
                         traceError(
@@ -213,6 +213,7 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
                 });
 
                 result?.proc?.on('close', (code, signal) => {
+                    console.log('close occurred');
                     traceVerbose('Test run finished, subprocess closed.');
                     // if the child has testIds then this is a run request
                     // if the child process exited with a non-zero exit code, then we need to send the error payload.
@@ -225,15 +226,24 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
                             this.resultResolver?.resolveExecution(
                                 utils.createExecutionErrorPayload(code, signal, testIds, cwd),
                                 runInstance,
+                                deferredTillEOT,
+                            );
+                            this.resultResolver?.resolveExecution(
+                                utils.createEOTPayload(true),
+                                runInstance,
+                                deferredTillEOT,
                             );
                         }
+                        // this doesn't work, it instead directs us to the noop one which is defined first
+                        // potentially this is due to the server already being close, if this is the case?
+                        serverDispose(); // this will resolve deferredTillServerClose
                     }
                     // deferredTillEOT is resolved when all data sent on stdout and stderr is received, close event is only called when this occurs
                     // due to the sync reading of the output.
-                    deferredTillExecClose?.resolve();
+                    deferredTillExecClose.resolve();
                     console.log('closing deferredTillExecClose');
                 });
-                await deferredTillExecClose?.promise;
+                await deferredTillExecClose.promise;
             }
         } catch (ex) {
             traceError(`Error while running tests for workspace ${uri}: ${testIds}\r\n${ex}\r\n\r\n`);

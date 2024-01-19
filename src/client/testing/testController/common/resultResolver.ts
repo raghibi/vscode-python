@@ -14,13 +14,14 @@ import {
 import * as util from 'util';
 import { DiscoveredTestPayload, EOTTestPayload, ExecutionTestPayload, ITestResultResolver } from './types';
 import { TestProvider } from '../../types';
-import { traceError } from '../../../logging';
+import { traceError, traceVerbose } from '../../../logging';
 import { Testing } from '../../../common/utils/localize';
 import { clearAllChildren, createErrorTestItem, getTestCaseNodes } from './testItemUtilities';
 import { sendTelemetryEvent } from '../../../telemetry';
 import { EventName } from '../../../telemetry/constants';
 import { splitLines } from '../../../common/stringUtils';
 import { buildErrorNodeOptions, populateTestTree, splitTestNameWithRegex } from './utils';
+import { Deferred } from '../../../common/utils/async';
 
 export class PythonResultResolver implements ITestResultResolver {
     testController: TestController;
@@ -44,13 +45,18 @@ export class PythonResultResolver implements ITestResultResolver {
         this.vsIdToRunId = new Map<string, string>();
     }
 
-    public resolveDiscovery(payload: DiscoveredTestPayload | EOTTestPayload, token?: CancellationToken): void {
-        if (!payload) {
+    public resolveDiscovery(
+        payload: DiscoveredTestPayload | EOTTestPayload,
+        deferredTillEOT: Deferred<void>,
+        token?: CancellationToken,
+    ): void {
+        if ('eot' in payload && payload.eot === true) {
+            deferredTillEOT.resolve();
+        } else if (!payload) {
             // No test data is available
-            return;
+        } else {
+            this._resolveDiscovery(payload as DiscoveredTestPayload, token);
         }
-
-        this._resolveDiscovery(payload as DiscoveredTestPayload, token);
     }
 
     public _resolveDiscovery(payload: DiscoveredTestPayload, token?: CancellationToken): void {
@@ -98,8 +104,18 @@ export class PythonResultResolver implements ITestResultResolver {
         });
     }
 
-    public resolveExecution(payload: ExecutionTestPayload | EOTTestPayload, runInstance: TestRun): void {
-        this._resolveExecution(payload as ExecutionTestPayload, runInstance);
+    public resolveExecution(
+        payload: ExecutionTestPayload | EOTTestPayload,
+        runInstance: TestRun,
+        deferredTillEOT: Deferred<void>,
+    ): void {
+        if ('eot' in payload && payload.eot === true) {
+            // eot sent once per connection
+            traceVerbose('EOT received, resolving deferredTillServerClose');
+            deferredTillEOT.resolve();
+        } else {
+            this._resolveExecution(payload as ExecutionTestPayload, runInstance);
+        }
     }
 
     public _resolveExecution(payload: ExecutionTestPayload, runInstance: TestRun): void {

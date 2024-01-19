@@ -15,6 +15,7 @@ import { DiscoveredTestPayload, EOTTestPayload, ITestDiscoveryAdapter, ITestResu
 import {
     MESSAGE_ON_TESTING_OUTPUT_MOVE,
     createDiscoveryErrorPayload,
+    createEOTPayload,
     createTestingDeferred,
     fixLogLinesNoTrailing,
     startDiscoveryNamedPipe,
@@ -36,15 +37,11 @@ export class PytestTestDiscoveryAdapter implements ITestDiscoveryAdapter {
         const deferredTillEOT: Deferred<void> = createDeferred<void>();
 
         const { name, dispose } = await startDiscoveryNamedPipe((data: DiscoveredTestPayload | EOTTestPayload) => {
-            if ('eot' in data && data.eot === true) {
-                deferredTillEOT.resolve();
-                return;
-            }
-            this.resultResolver?.resolveDiscovery(data);
+            this.resultResolver?.resolveDiscovery(data, deferredTillEOT);
         });
 
         try {
-            await this.runPytestDiscovery(uri, name, executionFactory);
+            await this.runPytestDiscovery(uri, name, deferredTillEOT, executionFactory);
         } finally {
             await deferredTillEOT.promise;
             traceVerbose('deferredTill EOT resolved');
@@ -58,6 +55,7 @@ export class PytestTestDiscoveryAdapter implements ITestDiscoveryAdapter {
     async runPytestDiscovery(
         uri: Uri,
         discoveryPipeName: string,
+        deferredTillEOT: Deferred<void>,
         executionFactory?: IPythonExecutionFactory,
     ): Promise<void> {
         const relativePathToPytest = 'pythonFiles';
@@ -125,7 +123,8 @@ export class PytestTestDiscoveryAdapter implements ITestDiscoveryAdapter {
                 traceError(
                     `Subprocess exited unsuccessfully with exit code ${code} and signal ${signal} on workspace ${uri.fsPath}. Creating and sending error discovery payload`,
                 );
-                this.resultResolver?.resolveDiscovery(createDiscoveryErrorPayload(code, signal, cwd));
+                this.resultResolver?.resolveDiscovery(createDiscoveryErrorPayload(code, signal, cwd), deferredTillEOT);
+                this.resultResolver?.resolveDiscovery(createEOTPayload(false), deferredTillEOT);
             }
             // deferredTillEOT is resolved when all data sent on stdout and stderr is received, close event is only called when this occurs
             // due to the sync reading of the output.

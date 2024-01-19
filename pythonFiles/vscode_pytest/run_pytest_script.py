@@ -34,7 +34,6 @@ if __name__ == "__main__":
     try:
         socket_name = os.environ.get("RUN_TEST_IDS_PIPE")
         with socket_manager.PipeManager(socket_name) as sock:
-            print("made it here")
             buffer = b""
             while True:
                 # Receive the data from the client

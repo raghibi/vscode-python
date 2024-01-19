@@ -9,7 +9,7 @@ import * as rpc from 'vscode-jsonrpc/node';
 import { traceVerbose } from '../../logging';
 
 export interface ConnectedServerObj {
-    serverOnCloseCallback(): Promise<void>;
+    serverOnClosePromise(): Promise<void>;
 }
 
 export function createNamedPipeServer(
@@ -42,8 +42,9 @@ export function createNamedPipeServer(
                 new rpc.SocketMessageWriter(socket, 'utf-8'),
             ]);
         });
-        const closedServerCallback = new Promise<void>((resolveOnServerClose) => {
+        const closedServerPromise = new Promise<void>((resolveOnServerClose) => {
             // get executed on connection close and resolves
+            // implementation of the promise is the arrow function
             server.on('close', resolveOnServerClose);
         });
         server.on('error', reject);
@@ -55,7 +56,7 @@ export function createNamedPipeServer(
                 // when onClosed event is called, so is closed function
                 // goes backwards up the chain, when resolve2 is called, so is onClosed that means server.onClosed() on the other end can work
                 // event C
-                serverOnCloseCallback: () => closedServerCallback,
+                serverOnClosePromise: () => closedServerPromise,
             };
             resolve(connectedServer);
         });
@@ -82,4 +83,9 @@ export function generateRandomPipeName(prefix: string): string {
     }
 
     return result;
+}
+
+export function namedPipeClient(name: string): [rpc.MessageReader, rpc.MessageWriter] {
+    const socket = net.connect(name);
+    return [new rpc.SocketMessageReader(socket, 'utf-8'), new rpc.SocketMessageWriter(socket, 'utf-8')];
 }

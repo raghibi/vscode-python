@@ -19,7 +19,7 @@ print("EJFB yellow")
 # debugpy.breakpoint()
 
 # If I use from utils then there will be an import error in test_discovery.py.
-from unittestadapter.utils import (
+from unittestadapter.pvsc_utils import (
     VSCodeUnittestError,
     build_test_tree,
     parse_unittest_args,
@@ -39,7 +39,6 @@ def discover_tests(
     The returned dict has the following keys:
 
     - cwd: Absolute path to the test start directory;
-    - uuid: UUID sent by the caller of the Python script, that needs to be sent back as an integrity check;
     - status: Test discovery status, can be "success" or "error";
     - tests: Discoverered tests if any, not present otherwise. Note that the status can be "error" but the payload can still contain tests;
     - error: Discovery error if any, not present otherwise.

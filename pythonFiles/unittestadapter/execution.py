@@ -133,6 +133,7 @@ class UnittestTestResult(unittest.TextTestResult):
             "subtest": subtest.id() if subtest else None,
         }
         self.formatted[test_id] = result
+        test_run_pipe = os.getenv("TEST_RUN_PIPE")
         if not test_run_pipe:
             print(
                 "UNITTEST ERROR: TEST_RUN_PIPE is not set at the time of unittest trying to send data. "

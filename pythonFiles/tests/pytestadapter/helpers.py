@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
+import asyncio
 import io
 import json
 import os
@@ -10,6 +11,9 @@ import subprocess
 import sys
 import threading
 from typing import Any, Dict, List, Optional, Tuple
+import win32pipe
+import win32file
+import pywintypes
 
 script_dir = pathlib.Path(__file__).parent.parent.parent
 sys.path.append(os.fspath(script_dir))
@@ -17,6 +21,136 @@ sys.path.append(os.fspath(script_dir / "lib" / "python"))
 
 TEST_DATA_PATH = pathlib.Path(__file__).parent / ".data"
 from typing_extensions import TypedDict
+from pythonFiles.testing_tools import socket_manager
+
+
+class NamedPipeReader:
+    def __init__(self, handle):
+        self.handle = handle
+
+    async def read(self, n):
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(None, win32file.ReadFile, self.handle, n)
+        # data[1] contains the actual data read
+        return data[1]
+
+
+class NamedPipeWriter:
+    def __init__(self, handle):
+        self.handle = handle
+
+    async def write(self, data):
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, win32file.WriteFile, self.handle, data)
+
+    async def close(self):
+        await asyncio.get_running_loop().run_in_executor(
+            None, win32file.CloseHandle, self.handle
+        )
+
+
+async def handle_client(reader, writer):
+    data = await reader.read(1024)
+    print(f"Received: {data.decode()}")
+    await writer.write(b"Hello from server")
+    await writer.close()
+
+
+class PipeManager:
+    def __init__(self, name):
+        self.name = name
+
+    def __enter__(self):
+        return self.listen()
+
+    def __exit__(self, *_):
+        self.close()
+
+    def listen(self):
+        # find library that creates named pipes for windows
+
+        if True:  # sys.platform == "win32":
+            # create a pipe
+            # create a reader, writer stream from the pipe
+            # no return (just set _reader and _writer)
+
+            pipe_name = r"\\.\pipe\mypipe"
+
+            pipe = win32pipe.CreateNamedPipe(
+                pipe_name,
+                win32pipe.PIPE_ACCESS_DUPLEX,
+                win32pipe.PIPE_TYPE_MESSAGE
+                | win32pipe.PIPE_READMODE_MESSAGE
+                | win32pipe.PIPE_WAIT,
+                1,
+                65536,
+                65536,
+                0,
+                None,
+            )
+
+            if pipe == -1:
+                print("Failed to create named pipe, in test helper file. Exiting.")
+            else:
+                print(f"Named pipe {pipe_name} created")
+
+            win32pipe.ConnectNamedPipe(pipe, None)
+            self._reader = NamedPipeReader(pipe)
+            self._writer = NamedPipeWriter(pipe)
+
+        else:
+            server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            server.listen(self.name)  # self.name = named pipe
+            (
+                _sock,
+                _,
+            ) = (
+                server.accept()
+            )  # occurs when client connects, returns a socket (_sock) which will be used for this specific
+            # client and server connection
+            self._socket = _sock
+        return self
+
+    def close(self):
+        if sys.platform == "win32":
+            self._writer.close()
+            # close the streams and the pipe
+        else:
+            # add exception catch
+            self._socket.close()
+
+    def write(self, data: str):
+        # must include the carriage-return defined (as \r\n) for unix systems
+        request = f"""content-length: {len(data)}\r\ncontent-type: application/json\r\n\r\n{data}"""
+        if sys.platform == "win32":
+            # this should work
+            self._writer.write(request)
+            self._writer.flush()
+        else:
+            self._socket.send(request.encode("utf-8"))
+            # does this also need a flush on the socket?
+
+    def read(self, bufsize=1024):
+        """Read data from the socket.
+
+        Args:
+            bufsize (int): Number of bytes to read from the socket.
+
+        Returns:
+            data (bytes): Data received from the socket.
+        """
+        if sys.platform == "win32":
+            # this should work
+            return self._reader.read(bufsize)
+        else:
+            data = b""
+            while True:
+                part = self._socket.recv(bufsize)
+                data += part
+                if len(part) < bufsize:
+                    # No more data, or less than bufsize data received
+                    break
+            return data
 
 
 def get_absolute_test_id(test_id: str, testPath: pathlib.Path) -> str:
@@ -50,6 +184,11 @@ def create_server(
         server.settimeout(timeout)
     server.listen(backlog)
     return server
+
+
+async def create_pipe(test_run_pipe: str) -> socket.socket:
+    __pipe = socket_manager.PipeManager(test_run_pipe)
+    return __pipe
 
 
 def _new_sock() -> socket.socket:
@@ -130,14 +269,18 @@ def runner_with_cwd(
         "vscode_pytest",
         "-s",
     ] + args
-    listener: socket.socket = create_server()
-    _, port = listener.getsockname()
-    listener.listen()
+
+    # create a pipe with the pipe manager
+    # when I create it will listen
+
+    test_run_pipe = "fake-pipe"
+    reader: socket.socket = create_pipe(test_run_pipe)
+    # listener.listen()
 
     env = os.environ.copy()
     env.update(
         {
-            "TEST_RUN_PIPE": str(port),
+            "TEST_RUN_PIPE": test_run_pipe,
             "PYTHONPATH": os.fspath(pathlib.Path(__file__).parent.parent.parent),
         }
     )
@@ -145,7 +288,7 @@ def runner_with_cwd(
 
     result = []
     t1: threading.Thread = threading.Thread(
-        target=_listen_on_socket, args=(listener, result, completed)
+        target=_listen_on_pipe, args=(reader, result, completed)
     )
     t1.start()
 
@@ -167,6 +310,8 @@ def _listen_on_socket(
     """Listen on the socket for the JSON data from the server.
     Created as a separate function for clarity in threading.
     """
+    # listen in pipe manager, pass in pipeManager
+    # same ish, just use "read" instead of the specific sock.recv
     sock, (other_host, other_port) = listener.accept()
     listener.settimeout(1)
     all_data: list = []
@@ -183,6 +328,16 @@ def _listen_on_socket(
                     return
         all_data.append(data.decode("utf-8"))
     result.append("".join(all_data))
+
+
+def _listen_on_pipe(
+    listener: socket.socket, result: List[str], completed: threading.Event
+):
+    """Listen on the pipe for the JSON data from the server."""
+    with listener as reader:
+        # Read data from the pipe
+        data = reader.read()
+        print(data)
 
 
 def _run_test_code(

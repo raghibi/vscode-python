@@ -19,11 +19,6 @@ from testing_tools import socket_manager
 from typing import Any, Dict, List, Optional, Union
 from typing_extensions import Literal, TypedDict
 
-# import debugpy
-
-# debugpy.listen(5678)
-# debugpy.breakpoint()
-
 
 class TestData(TypedDict):
     """A general class that all test objects inherit from."""

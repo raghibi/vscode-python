@@ -72,8 +72,7 @@ export class PytestTestDiscoveryAdapter implements ITestDiscoveryAdapter {
         const pythonPathParts: string[] = mutableEnv.PYTHONPATH?.split(path.delimiter) ?? [];
         const pythonPathCommand = [fullPluginPath, ...pythonPathParts].join(path.delimiter);
         mutableEnv.PYTHONPATH = pythonPathCommand;
-        mutableEnv.TEST_UUID = uuid.toString();
-        mutableEnv.TEST_PORT = this.testServer.getPort().toString();
+        mutableEnv.TEST_RUN_PIPE = discoveryPipeName;
         traceInfo(`All environment variables set for pytest discovery: ${JSON.stringify(mutableEnv)}`);
         const spawnOptions: SpawnOptions = {
             cwd,

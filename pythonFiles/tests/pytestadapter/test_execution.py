@@ -1,10 +1,15 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 import os
+import pathlib
 import shutil
+import sys
 from typing import Any, Dict, List
 
 import pytest
+
+script_dir = pathlib.Path(__file__).parent.parent
+sys.path.append(os.fspath(script_dir))
 
 from tests.pytestadapter import expected_execution_test_output
 
@@ -24,7 +29,7 @@ def test_config_file():
         expected_execution_test_output.config_file_pytest_expected_execution_output
     )
     assert actual
-    actual_list: List[Dict[str, Any]] = actual
+    actual_list: List[Dict[str, Dict[str, Any]]] = actual
     assert actual_list.pop(-1).get("params").get("eot")
     assert len(actual_list) == len(expected_const)
     actual_result_dict = dict()
@@ -50,7 +55,7 @@ def test_rootdir_specified():
         expected_execution_test_output.config_file_pytest_expected_execution_output
     )
     assert actual
-    actual_list: List[Dict[str, Any]] = actual
+    actual_list: List[Dict[str, Dict[str, Any]]] = actual
     assert actual_list.pop(-1).get("params").get("eot")
     assert len(actual_list) == len(expected_const)
     actual_result_dict = dict()
@@ -87,7 +92,8 @@ def test_syntax_error_execution(tmp_path):
     shutil.copyfile(file_path, p)
     actual = runner(["error_syntax_discover.py::test_function"])
     assert actual
-    actual_list: List[Dict[str, Any]] = actual
+    actual_list: List[Dict[str, Dict[str, Any]]] = actual
+
     assert actual_list.pop(-1).get("params").get("eot")
     if actual_list is not None:
         for actual_item in actual_list:
@@ -113,7 +119,7 @@ def test_bad_id_error_execution():
     """
     actual = runner(["not/a/real::test_id"])
     assert actual
-    actual_list: List[Dict[str, Any]] = actual
+    actual_list: List[Dict[str, Dict[str, Any]]] = actual
     assert actual_list.pop(-1).get("params").get("eot")
     if actual_list is not None:
         for actual_item in actual_list:
@@ -259,7 +265,7 @@ def test_pytest_execution(test_ids, expected_const):
     args = test_ids
     actual = runner(args)
     assert actual
-    actual_list: List[Dict[str, Any]] = actual
+     actual_list: List[Dict[str, Dict[str, Any]]] = actual
     assert actual_list.pop(-1).get("params").get("eot")
     assert len(actual_list) == len(expected_const)
     actual_result_dict = dict()

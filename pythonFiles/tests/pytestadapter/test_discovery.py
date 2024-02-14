@@ -40,9 +40,8 @@ def test_import_error(tmp_path):
     assert actual
     actual_list: List[Dict[str, Any]] = actual
     if actual_list is not None:
-        assert actual_list.pop(-1).get("params").get("eot")
+        assert actual_list.pop(-1).get("eot")
         for actual_item in actual_list:
-            actual_item = actual_item.pop("params")
             assert all(
                 item in actual_item.keys() for item in ("status", "cwd", "error")
             )
@@ -82,9 +81,8 @@ def test_syntax_error(tmp_path):
     assert actual
     actual_list: List[Dict[str, Any]] = actual
     if actual_list is not None:
-        assert actual_list.pop(-1).get("params").get("eot")
+        assert actual_list.pop(-1).get("eot")
         for actual_item in actual_list:
-            actual_item = actual_item.pop("params")
             assert all(
                 item in actual_item.keys() for item in ("status", "cwd", "error")
             )
@@ -111,9 +109,8 @@ def test_parameterized_error_collect():
     assert actual
     actual_list: List[Dict[str, Any]] = actual
     if actual_list is not None:
-        assert actual_list.pop(-1).get("params").get("eot")
+        assert actual_list.pop(-1).get("eot")
         for actual_item in actual_list:
-            actual_item = actual_item.pop("params")
             assert all(
                 item in actual_item.keys() for item in ("status", "cwd", "error")
             )
@@ -200,9 +197,9 @@ def test_pytest_collect(file, expected_const):
     assert actual
     actual_list: List[Dict[str, Any]] = actual
     if actual_list is not None:
-        assert actual_list.pop(-1).get("params").get("eot")
+        assert actual_list.pop(-1).get("eot")
         actual_item = actual_list.pop(0)
-        actual_item = actual_item.pop("params")
+
         assert all(item in actual_item.keys() for item in ("status", "cwd", "error"))
         assert actual_item.get("status") == "success"
         assert actual_item.get("cwd") == os.fspath(TEST_DATA_PATH)
@@ -225,9 +222,9 @@ def test_pytest_root_dir():
     assert actual
     actual_list: List[Dict[str, Any]] = actual
     if actual_list is not None:
-        assert actual_list.pop(-1).get("params").get("eot")
+        assert actual_list.pop(-1).get("eot")
         actual_item = actual_list.pop(0)
-        actual_item = actual_item.pop("params")
+
         assert all(item in actual_item.keys() for item in ("status", "cwd", "error"))
         assert actual_item.get("status") == "success"
         assert actual_item.get("cwd") == os.fspath(TEST_DATA_PATH / "root")
@@ -252,9 +249,9 @@ def test_pytest_config_file():
     assert actual
     actual_list: List[Dict[str, Any]] = actual
     if actual_list is not None:
-        assert actual_list.pop(-1).get("params").get("eot")
+        assert actual_list.pop(-1).get("eot")
         actual_item = actual_list.pop(0)
-        actual_item = actual_item.pop("params")
+
         assert all(item in actual_item.keys() for item in ("status", "cwd", "error"))
         assert actual_item.get("status") == "success"
         assert actual_item.get("cwd") == os.fspath(TEST_DATA_PATH / "root")

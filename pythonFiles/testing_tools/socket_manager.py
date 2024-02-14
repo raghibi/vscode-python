@@ -40,7 +40,7 @@ class PipeManager:
             self._writer.write(request)
             self._writer.flush()
         else:
-            self._socket.send(request.encode("utf-8"))
+            self._socket.send(data.encode("utf-8"))
             # does this also need a flush on the socket?
 
     def read(self, bufsize=1024):

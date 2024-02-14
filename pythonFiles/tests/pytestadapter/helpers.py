@@ -18,7 +18,7 @@ sys.path.append(os.fspath(script_dir))
 sys.path.append(os.fspath(script_dir / "lib" / "python"))
 print("sys add path", script_dir)
 TEST_DATA_PATH = pathlib.Path(__file__).parent / ".data"
-from testing_tools import socket_manager
+from testing_tools.socket_manager import PipeManager
 from tests.pytestadapter.helpers_new import (
     SingleConnectionPipeServer,
     generate_random_pipe_name,
@@ -130,45 +130,56 @@ def get_absolute_test_id(test_id: str, testPath: pathlib.Path) -> str:
 
 
 async def create_pipe(test_run_pipe: str) -> socket.socket:
-    __pipe = socket_manager.PipeManager(test_run_pipe)
+    __pipe = PipeManager(test_run_pipe)
     return __pipe
 
 
 CONTENT_LENGTH: str = "Content-Length:"
 
 
-def process_rpc_message(data: str) -> Tuple[Dict[str, Any], str]:
-    """Process the JSON data which comes from the server which runs the pytest discovery."""
-    str_stream: io.StringIO = io.StringIO(data)
+# def process_rpc_message(data: str) -> Tuple[Dict[str, Any], str]:
+#     """Process the JSON data which comes from the server which runs the pytest discovery."""
+#     str_stream: io.StringIO = io.StringIO(data)
 
-    length: int = 0
+#     length: int = 124 * 140
 
-    while True:
-        line: str = str_stream.readline()
-        if CONTENT_LENGTH.lower() in line.lower():
-            length = int(line[len(CONTENT_LENGTH) :])
-            break
+#     while True:
+#         line: str = str_stream.readline()
+#         if "jsonrpc" not in line.lower():
+#             raise ValueError("Header does not contain jsonrpc")
+#         else:
+#             break
 
-        if not line or line.isspace():
-            raise ValueError("Header does not contain Content-Length")
+#     while True:
+#         line: str = str_stream.readline()
+#         if not line or line.isspace():
+#             break
 
-    while True:
-        line: str = str_stream.readline()
-        if not line or line.isspace():
-            break
-
-    raw_json: str = str_stream.read(length)
-    return json.loads(raw_json), str_stream.read()
+#     raw_json: str = str_stream.read(length)
+#     return json.loads(raw_json), str_stream.read()
 
 
-def process_rpc_json(data: str) -> List[Dict[str, Any]]:
+def process_rpc_json(data: List[str]) -> List[Dict[str, Any]]:
     """Process the JSON data which comes from the server which runs the pytest discovery."""
     json_messages = []
-    remaining = data
-    while remaining:
-        json_data, remaining = process_rpc_message(remaining)
-        json_messages.append(json_data)
-
+    delimiter = '{"jsonrpc": "2.0",'
+    for i in data:
+        if delimiter not in i.lower():
+            raise ValueError("Header does not contain jsonrpc")
+        elif i.count(delimiter) > 1:
+            raise ValueError("too many jsons, must split")
+            # split_data = i.split(delimiter)
+        else:
+            try:
+                j = json.loads(i)
+                if "params" in j:
+                    json_messages.append(j.get("params"))
+                else:
+                    raise ValueError("No params in json")
+            except json.JSONDecodeError:
+                print("json decode error")
+                print("attempting to decode", i)
+                raise
     return json_messages
 
 
@@ -179,7 +190,6 @@ def _listen_on_pipe_new(listener, result: List[str], completed: threading.Event)
     # Accept a connection. Note: For named pipes, the accept method might be different.
     connection, _ = listener.socket.accept()
     listener.socket.settimeout(1)
-    all_data = []
 
     while True:
         # Reading from connection
@@ -195,12 +205,11 @@ def _listen_on_pipe_new(listener, result: List[str], completed: threading.Event)
                     connection, _ = listener.socket.accept()
                 except socket.timeout:
                     # On timeout, append all collected data to result and return
-                    result.append("".join(all_data))
+                    # result.append("".join(all_data))
                     return
         else:
-            all_data.append(data.decode("utf-8"))
-
-    result.append("".join(all_data))
+            result.append(data.decode("utf-8"))
+    # result  # .append("".join(all_data))
 
 
 def runner(args: List[str]) -> Optional[List[Dict[str, Any]]]:
@@ -254,7 +263,7 @@ def runner_with_cwd(
     t1.join()
     t2.join()
 
-    return process_rpc_json(result[0]) if result else None
+    return process_rpc_json(result) if result else None
 
 
 def _listen_on_pipe(

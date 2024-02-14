@@ -12,11 +12,9 @@ import sys
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 
-from pythonFiles.tests.pytestadapter.helpers_new import (
-    SingleConnectionPipeServer,
-    generate_random_pipe_name,
-)
-
+# import win32pipe
+# import win32file
+# import pywintypes
 
 script_dir = pathlib.Path(__file__).parent.parent.parent
 sys.path.append(os.fspath(script_dir))
@@ -25,6 +23,38 @@ sys.path.append(os.fspath(script_dir / "lib" / "python"))
 TEST_DATA_PATH = pathlib.Path(__file__).parent / ".data"
 from typing_extensions import TypedDict
 from pythonFiles.testing_tools import socket_manager
+
+
+# class NamedPipeReader:
+# def __init__(self, handle):
+#     self.handle = handle
+
+# async def read(self, n):
+#     loop = asyncio.get_running_loop()
+#     data = await loop.run_in_executor(None, win32file.ReadFile, self.handle, n)
+#     # data[1] contains the actual data read
+#     return data[1]
+
+
+# class NamedPipeWriter:
+#     def __init__(self, handle):
+#         self.handle = handle
+
+#     async def write(self, data):
+#         loop = asyncio.get_running_loop()
+#         await loop.run_in_executor(None, win32file.WriteFile, self.handle, data)
+
+#     async def close(self):
+#         await asyncio.get_running_loop().run_in_executor(
+#             None, win32file.CloseHandle, self.handle
+#         )
+
+
+# async def handle_client(reader, writer):
+#     data = await reader.read(1024)
+#     print(f"Received: {data.decode()}")
+#     await writer.write(b"Hello from server")
+#     await writer.close()
 
 
 class PipeManager:
@@ -131,12 +161,61 @@ def get_absolute_test_id(test_id: str, testPath: pathlib.Path) -> str:
     return absolute_test_id
 
 
+# def create_server(
+#     host: str = "127.0.0.1",
+#     port: int = 0,
+#     backlog: int = socket.SOMAXCONN,
+#     timeout: int = 1000,
+# ) -> socket.socket:
+#     """Return a local server socket listening on the given port."""
+#     server: socket.socket = _new_sock()
+#     if port:
+#         # If binding to a specific port, make sure that the user doesn't have
+#         # to wait until the OS times out waiting for socket in order to use
+#         # that port again if the server or the adapter crash or are force-killed.
+#         if sys.platform == "win32":
+#             server.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+#         else:
+#             try:
+#                 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+#             except (AttributeError, OSError):
+#                 pass  # Not available everywhere
+#     server.bind((host, port))
+#     if timeout:
+#         server.settimeout(timeout)
+#     server.listen(backlog)
+#     return server
+
+
 async def create_pipe(test_run_pipe: str) -> socket.socket:
     __pipe = socket_manager.PipeManager(test_run_pipe)
     return __pipe
 
 
+# def _new_sock() -> socket.socket:
+#     sock: socket.socket = socket.socket(
+#         socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP
+#     )
+#     options = [
+#         ("SOL_SOCKET", "SO_KEEPALIVE", 1),
+#         ("IPPROTO_TCP", "TCP_KEEPIDLE", 1),
+#         ("IPPROTO_TCP", "TCP_KEEPINTVL", 3),
+#         ("IPPROTO_TCP", "TCP_KEEPCNT", 5),
+#     ]
+
+#     for level, name, value in options:
+#         try:
+#             sock.setsockopt(getattr(socket, level), getattr(socket, name), value)
+#         except (AttributeError, OSError):
+#             pass  # May not be available everywhere.
+
+#     return sock
+
+
 CONTENT_LENGTH: str = "Content-Length:"
+Env_Dict = TypedDict(
+    "Env_Dict", {"TEST_UUID": str, "TEST_PORT": str, "PYTHONPATH": str}
+)
 
 
 def process_rpc_message(data: str) -> Tuple[Dict[str, Any], str]:
@@ -174,37 +253,6 @@ def process_rpc_json(data: str) -> List[Dict[str, Any]]:
     return json_messages
 
 
-def _listen_on_pipe_new(listener, result: List[str], completed: threading.Event):
-    """Listen on the named pipe or Unix domain socket for JSON data from the server.
-    Created as a separate function for clarity in threading context.
-    """
-    # Accept a connection. Note: For named pipes, the accept method might be different.
-    connection, _ = listener.socket.accept()
-    listener.socket.settimeout(1)
-    all_data = []
-
-    while True:
-        # Reading from connection
-        data = connection.recv(
-            1024 * 1024
-        )  # You might replace this with connection.read() based on your abstraction
-        if not data:
-            if completed.is_set():
-                break  # Exit loop if completed event is set
-            else:
-                try:
-                    # Attempt to accept another connection if the current one closes unexpectedly
-                    connection, _ = listener.socket.accept()
-                except socket.timeout:
-                    # On timeout, append all collected data to result and return
-                    result.append("".join(all_data))
-                    return
-        else:
-            all_data.append(data.decode("utf-8"))
-
-    result.append("".join(all_data))
-
-
 def runner(args: List[str]) -> Optional[List[Dict[str, Any]]]:
     """Run the pytest discovery and return the JSON data from the server."""
     return runner_with_cwd(args, TEST_DATA_PATH)
@@ -225,17 +273,15 @@ def runner_with_cwd(
 
     # create a pipe with the pipe manager
     # when I create it will listen
-    # Example usage
-    # Replace '/tmp/example.sock' with a Windows-compatible path for named pipes if on Windows.
-    pipe_name = generate_random_pipe_name("pytest-discovery-test")
-    print("pipe name generated", pipe_name)
-    server = SingleConnectionPipeServer(pipe_name)
-    server.start()
+
+    test_run_pipe = "fake-pipe"
+    reader: socket.socket = create_pipe(test_run_pipe)
+    # listener.listen()
 
     env = os.environ.copy()
     env.update(
         {
-            "TEST_RUN_PIPE": pipe_name,
+            "TEST_RUN_PIPE": test_run_pipe,
             "PYTHONPATH": os.fspath(pathlib.Path(__file__).parent.parent.parent),
         }
     )
@@ -243,7 +289,7 @@ def runner_with_cwd(
 
     result = []
     t1: threading.Thread = threading.Thread(
-        target=_listen_on_pipe_new, args=(server, result, completed)
+        target=_listen_on_pipe, args=(reader, result, completed)
     )
     t1.start()
 
@@ -257,6 +303,32 @@ def runner_with_cwd(
     t2.join()
 
     return process_rpc_json(result[0]) if result else None
+
+
+# def _listen_on_socket(
+#     listener: socket.socket, result: List[str], completed: threading.Event
+# ):
+#     """Listen on the socket for the JSON data from the server.
+#     Created as a separate function for clarity in threading.
+#     """
+#     # listen in pipe manager, pass in pipeManager
+#     # same ish, just use "read" instead of the specific sock.recv
+#     sock, (other_host, other_port) = listener.accept()
+#     listener.settimeout(1)
+#     all_data: list = []
+#     while True:
+#         data: bytes = sock.recv(1024 * 1024)
+#         if not data:
+#             if completed.is_set():
+#                 break
+#             else:
+#                 try:
+#                     sock, (other_host, other_port) = listener.accept()
+#                 except socket.timeout:
+#                     result.append("".join(all_data))
+#                     return
+#         all_data.append(data.decode("utf-8"))
+#     result.append("".join(all_data))
 
 
 def _listen_on_pipe(

@@ -305,30 +305,30 @@
 #     return process_rpc_json(result[0]) if result else None
 
 
-# # def _listen_on_socket(
-# #     listener: socket.socket, result: List[str], completed: threading.Event
-# # ):
-# #     """Listen on the socket for the JSON data from the server.
-# #     Created as a separate function for clarity in threading.
-# #     """
-# #     # listen in pipe manager, pass in pipeManager
-# #     # same ish, just use "read" instead of the specific sock.recv
-# #     sock, (other_host, other_port) = listener.accept()
-# #     listener.settimeout(1)
-# #     all_data: list = []
-# #     while True:
-# #         data: bytes = sock.recv(1024 * 1024)
-# #         if not data:
-# #             if completed.is_set():
-# #                 break
-# #             else:
-# #                 try:
-# #                     sock, (other_host, other_port) = listener.accept()
-# #                 except socket.timeout:
-# #                     result.append("".join(all_data))
-# #                     return
-# #         all_data.append(data.decode("utf-8"))
-# #     result.append("".join(all_data))
+def _listen_on_socket(
+    listener: socket.socket, result: List[str], completed: threading.Event
+):
+    """Listen on the socket for the JSON data from the server.
+    Created as a separate function for clarity in threading.
+    """
+    # listen in pipe manager, pass in pipeManager
+    # same ish, just use "read" instead of the specific sock.recv
+    sock, (other_host, other_port) = listener.accept()
+    listener.settimeout(1)
+    all_data: list = []
+    while True:
+        data: bytes = sock.recv(1024 * 1024)
+        if not data:
+            if completed.is_set():
+                break
+            else:
+                try:
+                    sock, (other_host, other_port) = listener.accept()
+                except socket.timeout:
+                    result.append("".join(all_data))
+                    return
+        all_data.append(data.decode("utf-8"))
+    result.append("".join(all_data))
 
 
 # def _listen_on_pipe(

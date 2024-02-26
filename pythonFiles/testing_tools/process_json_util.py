@@ -22,7 +22,7 @@ def process_rpc_json(data: str) -> List[str]:
         if not line or line.isspace():
             raise ValueError("Header does not contain Content-Length")
 
-    while True:
+    while True:  # keep reading until the number of bytes is the CONTENT_LENGTH
         line: str = str_stream.readline()
         if not line or line.isspace():
             break

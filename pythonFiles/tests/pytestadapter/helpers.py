@@ -1,5 +1,3 @@
-Abcd
-
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
@@ -22,7 +20,6 @@ sys.path.append(os.fspath(script_dir_child))
 sys.path.append(os.fspath(script_dir / "lib" / "python"))
 print("sys add path", script_dir)
 TEST_DATA_PATH = pathlib.Path(__file__).parent / ".data"
-# from testing_tools.socket_manager import PipeManager
 from tests.pytestadapter.helpers_new import (
     SingleConnectionPipeServer,
     generate_random_pipe_name,
@@ -100,13 +97,6 @@ class PipeManager:
             return data
 
 
-def get_absolute_test_id(test_id: str, testPath: pathlib.Path) -> str:
-    split_id = test_id.split("::")[1:]
-    absolute_test_id = "::".join([str(testPath), *split_id])
-    print("absolute path", absolute_test_id)
-    return absolute_test_id
-
-
 async def create_pipe(test_run_pipe: str) -> socket.socket:
     __pipe = PipeManager(test_run_pipe)
     return __pipe
@@ -116,25 +106,44 @@ CONTENT_LENGTH: str = "Content-Length:"
 CONTENT_TYPE: str = "Content-Type:"
 
 
-def process_rpc_json(data: str) -> List[Dict[str, Any]]:
-    """Process the JSON data which comes from the server which runs the pytest discovery."""
+def process_data_received(data: str) -> List[Dict[str, Any]]:
+    """Process the all JSON data which comes from the server. After listen is finished, this function will be called.
+    Here the data must be split into individual JSON messages and then parsed.
+
+    This function also:
+    - Checks that the jsonrpc value is 2.0
+    - Checks that the last JSON message contains the `eot` token.
+
+    """
     json_messages = []
     remaining = data
     while remaining:
-        json_data, remaining = process_rpc_message(remaining)
-        json_messages.append(json_data)
-    return json_messages
+        json_data, remaining = parse_rpc_message(remaining)
+        # here json_data is a single rpc payload, now check its jsonrpc 2 and save the param data
+        if json_data["jsonrpc"] == "2.0":
+            json_messages.append(json_data["params"])
+        else:
+            raise ValueError("Invalid JSON-RPC message received")
+
+    last_json = json_messages.pop(-1)
+    if "eot" not in last_json:
+        raise ValueError(
+            "Last JSON messages does not contain 'eot' as its last payload."
+        )
+    return json_messages  # return the list of json messages, only the params part with the EOT token
 
 
-def process_rpc_message(data: str) -> List[str]:
-    """Process the JSON data which comes from the server."""
+def parse_rpc_message(data: str) -> Tuple[str, str]:
+    """Process the JSON data which comes from the server.
+    returns:
+    json_data: A single rpc payload of JSON data from the server.
+    remaining: The remaining data after the JSON data."""
     str_stream: io.StringIO = io.StringIO(data)
 
     # 'content-length: 1944\r\ncontent-type: application/json\r\n\r\n{"jsonrpc": "2.0", "params": {"command_type": "discovery",
     # ...]}}content-length: 72\r\ncontent-type: application/json\r\n\r\n{"jsonrpc": "2.0", "params": {"command_type": "discovery", "eot": true}}'
 
     length: int = 0
-    json_messages = []
     while True:
         line: str = str_stream.readline()
         if CONTENT_LENGTH.lower() in line.lower():
@@ -149,6 +158,7 @@ def process_rpc_message(data: str) -> List[str]:
                 raise ValueError(
                     "Header does not contain space to separate header and body"
                 )
+            # if it passes all these checks then it has the right headers
             break
 
         if not line or line.isspace():
@@ -157,15 +167,14 @@ def process_rpc_message(data: str) -> List[str]:
     while True:  # keep reading until the number of bytes is the CONTENT_LENGTH
         line: str = str_stream.readline(length)
         try:
+            # try to parse the json, if successful it is single payload so return with remaining data
             json_data = json.loads(line)
-            print("json_data", json_data)
-            json_messages.append(json_data)
             return json_data, str_stream.read()
         except json.JSONDecodeError:
             print("json decode error")
 
 
-def _listen_on_pipe_new(listener, result: str, completed: threading.Event):
+def _listen_on_pipe_new(listener, result: List[str], completed: threading.Event):
     """Listen on the named pipe or Unix domain socket for JSON data from the server.
     Created as a separate function for clarity in threading context.
     """
@@ -190,7 +199,16 @@ def _listen_on_pipe_new(listener, result: str, completed: threading.Event):
                     result.append("".join(all_data))
                     return
         all_data.append(data.decode("utf-8"))
+    # Append all collected data to result array
     result.append("".join(all_data))
+
+
+def _run_test_code(
+    proc_args: List[str], proc_env, proc_cwd: str, completed: threading.Event
+):
+    result = subprocess.run(proc_args, env=proc_env, cwd=proc_cwd)
+    completed.set()
+    return result
 
 
 def runner(args: List[str]) -> Optional[List[Dict[str, Any]]]:
@@ -229,7 +247,7 @@ def runner_with_cwd(
     )
     completed = threading.Event()
 
-    result = []
+    result = []  # result is a string array to store the data during threading
     t1: threading.Thread = threading.Thread(
         target=_listen_on_pipe_new, args=(server, result, completed)
     )
@@ -244,25 +262,7 @@ def runner_with_cwd(
     t1.join()
     t2.join()
 
-    return process_rpc_json(result[0]) if result else None
-
-
-def _listen_on_pipe(
-    listener: socket.socket, result: List[str], completed: threading.Event
-):
-    """Listen on the pipe for the JSON data from the server."""
-    with listener as reader:
-        # Read data from the pipe
-        data = reader.read()
-        print(data)
-
-
-def _run_test_code(
-    proc_args: List[str], proc_env, proc_cwd: str, completed: threading.Event
-):
-    result = subprocess.run(proc_args, env=proc_env, cwd=proc_cwd)
-    completed.set()
-    return result
+    return process_data_received(result[0]) if result else None
 
 
 def find_test_line_number(test_name: str, test_file_path) -> str:
@@ -281,3 +281,10 @@ def find_test_line_number(test_name: str, test_file_path) -> str:
                 return str(i + 1)
     error_str: str = f"Test {test_name!r} not found on any line in {test_file_path}"
     raise ValueError(error_str)
+
+
+def get_absolute_test_id(test_id: str, testPath: pathlib.Path) -> str:
+    split_id = test_id.split("::")[1:]
+    absolute_test_id = "::".join([str(testPath), *split_id])
+    print("absolute path", absolute_test_id)
+    return absolute_test_id

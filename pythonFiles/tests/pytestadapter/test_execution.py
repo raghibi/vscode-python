@@ -30,7 +30,6 @@ def test_config_file():
     )
     assert actual
     actual_list: List[Dict[str, Any]] = actual
-    assert actual_list.pop(-1).get("eot")
     assert len(actual_list) == len(expected_const)
     actual_result_dict = dict()
     if actual_list is not None:
@@ -55,7 +54,6 @@ def test_rootdir_specified():
     )
     assert actual
     actual_list: List[Dict[str, Dict[str, Any]]] = actual
-    assert actual_list.pop(-1).get("eot")
     assert len(actual_list) == len(expected_const)
     actual_result_dict = dict()
     if actual_list is not None:
@@ -92,7 +90,6 @@ def test_syntax_error_execution(tmp_path):
     assert actual
     actual_list: List[Dict[str, Dict[str, Any]]] = actual
 
-    assert actual_list.pop(-1).get("eot")
     if actual_list is not None:
         for actual_item in actual_list:
             assert all(
@@ -117,7 +114,6 @@ def test_bad_id_error_execution():
     actual = runner(["not/a/real::test_id"])
     assert actual
     actual_list: List[Dict[str, Dict[str, Any]]] = actual
-    assert actual_list.pop(-1).get("eot")
     if actual_list is not None:
         for actual_item in actual_list:
             assert all(
@@ -262,7 +258,6 @@ def test_pytest_execution(test_ids, expected_const):
     actual = runner(args)
     assert actual
     actual_list: List[Dict[str, Dict[str, Any]]] = actual
-    assert actual_list.pop(-1).get("eot")
     assert len(actual_list) == len(expected_const)
     actual_result_dict = dict()
     if actual_list is not None:

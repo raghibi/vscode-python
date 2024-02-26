@@ -14,15 +14,74 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 script_dir = pathlib.Path(__file__).parent.parent.parent
+script_dir_child = pathlib.Path(__file__).parent.parent
 sys.path.append(os.fspath(script_dir))
+sys.path.append(os.fspath(script_dir_child))
 sys.path.append(os.fspath(script_dir / "lib" / "python"))
 print("sys add path", script_dir)
 TEST_DATA_PATH = pathlib.Path(__file__).parent / ".data"
-from testing_tools.socket_manager import PipeManager
+# from testing_tools.socket_manager import PipeManager
 from tests.pytestadapter.helpers_new import (
     SingleConnectionPipeServer,
     generate_random_pipe_name,
 )
+
+
+# class PipeManager:
+#     def __init__(self, name):
+#         self.name = name
+
+#     def __enter__(self):
+#         return self.connect()
+
+#     def __exit__(self, *_):
+#         self.close()
+
+#     def connect(self):
+#         if sys.platform == "win32":
+#             self._writer = open(self.name, "wt", encoding="utf-8")
+#         else:
+#             self._socket = _SOCKET(socket.AF_UNIX, socket.SOCK_STREAM)
+#         self._socket.connect(self.name)
+#         return self
+
+#     def close(self):
+#         if sys.platform == "win32":
+#             self._writer.close()
+#         else:
+#             # add exception catch
+#             self._socket.close()
+
+#     def write(self, data: str):
+#         # must include the carriage-return defined (as \r\n) for unix systems
+#         request = f"""content-length: {len(data)}\r\ncontent-type: application/json\r\n\r\n{data}"""
+#         if sys.platform == "win32":
+#             self._writer.write(request)
+#             self._writer.flush()
+#         else:
+#             self._socket.send(request.encode("utf-8"))
+#             # does this also need a flush on the socket?
+
+#     def read(self, bufsize=1024):
+#         """Read data from the socket.
+
+#         Args:
+#             bufsize (int): Number of bytes to read from the socket.
+
+#         Returns:
+#             data (bytes): Data received from the socket.
+#         """
+#         if sys.platform == "win32":
+#             return self._reader.read(bufsize)
+#         else:
+#             data = b""
+#             while True:
+#                 part = self._socket.recv(bufsize)
+#                 data += part
+#                 if len(part) < bufsize:
+#                     # No more data, or less than bufsize data received
+#                     break
+#             return data
 
 
 class PipeManager:

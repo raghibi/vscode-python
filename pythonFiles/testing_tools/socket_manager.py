@@ -21,9 +21,10 @@ class PipeManager:
     def connect(self):
         if sys.platform == "win32":
             self._writer = open(self.name, "wt", encoding="utf-8")
+            self._reader = open(self.name, "rt", encoding="utf-8")
         else:
             self._socket = _SOCKET(socket.AF_UNIX, socket.SOCK_STREAM)
-        self._socket.connect(self.name)
+            self._socket.connect(self.name)
         return self
 
     def close(self):
@@ -34,12 +35,20 @@ class PipeManager:
             self._socket.close()
 
     def write(self, data: str):
-        # must include the carriage-return defined (as \r\n) for unix systems
-        request = f"""content-length: {len(data)}\r\ncontent-type: application/json\r\n\r\n{data}"""
         if sys.platform == "win32":
-            self._writer.write(request)
-            self._writer.flush()
+            try:
+                # for windows, is should only use \n\n
+                print("platform is windows, writing now", self.name)
+                request = f"""content-length: {len(data)}\ncontent-type: application/json\n\n{data}"""
+                a = self._writer.write(request)
+                print("num written? ", a)
+                self._writer.flush()
+            except Exception as e:
+                print("THERE WAS AN ERROR ALERT!!!!", e)
+                raise (e)
         else:
+            # must include the carriage-return defined (as \r\n) for unix systems
+            request = f"""content-length: {len(data)}\r\ncontent-type: application/json\r\n\r\n{data}"""
             self._socket.send(request.encode("utf-8"))
             # does this also need a flush on the socket?
 

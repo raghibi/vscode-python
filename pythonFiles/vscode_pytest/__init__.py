@@ -369,6 +369,7 @@ def pytest_sessionfinish(session, exitstatus):
         # send end of transmission token
     command_type = "discovery" if IS_DISCOVERY else "execution"
     payload: EOTPayloadDict = {"command_type": command_type, "eot": True}
+    print("payload has been determined end of session finish, type is ", command_type)
     send_post_request(payload)
 
 
@@ -672,6 +673,7 @@ def execution_post(
     )
     if ERRORS:
         payload["error"] = ERRORS
+    print("ejfb ==== shouldn't hit here it is execuction post")
     send_post_request(payload)
 
 
@@ -692,6 +694,7 @@ def post_response(cwd: str, session_node: TestNode) -> None:
     }
     if ERRORS is not None:
         payload["error"] = ERRORS
+    print("EJFB 1: this is the spot in post response!!!!!!")
     send_post_request(payload, cls_encoder=PathEncoder)
 
 
@@ -748,7 +751,7 @@ def send_post_request(
         "params": payload,
     }
     data = json.dumps(rpc, cls=cls_encoder)
-
+    print("FYI this is the data im writing \n", data)
     try:
         if __writer:
             __writer.write(data)

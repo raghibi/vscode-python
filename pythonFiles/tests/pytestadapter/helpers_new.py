@@ -3,9 +3,13 @@ from ast import List
 import os
 import tempfile
 import threading
+from typing import IO
 import uuid
 import socket
 import sys
+from namedpipe import NPopen
+import subprocess as sp
+import win32pipe
 
 
 def generate_random_pipe_name(prefix=""):
@@ -35,9 +39,11 @@ class SingleConnectionPipeServer:
         if self.is_windows:
             # Windows-specific setup for named pipe not shown here;
             # Named pipes in Python on Windows might require win32pipe or similar.
-            raise NotImplementedError(
-                "Windows named pipe server functionality is not implemented in this example."
-            )
+            with NPopen(mode="rt", name=name) as pipe:  # Added a `name` parameter
+                print("pipe?", pipe)
+                self.pipe = pipe
+                # self.stream: IO | None = pipe.wait()
+
         else:
             # For Unix-like systems, use a Unix domain socket.
             self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -51,6 +57,7 @@ class SingleConnectionPipeServer:
     def start(self):
         if self.is_windows:
             # Windows-specific named pipe server setup would go here.
+            # print("pipe is here I think?", self.stream)
             pass
         else:
             # Bind the socket to the address and listen for incoming connections.

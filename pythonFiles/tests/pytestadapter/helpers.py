@@ -189,10 +189,13 @@ def _listen_on_pipe_new(listener, result: List[str], completed: threading.Event)
         # set a timeout
         # create a data array
         all_data: list = []
+        stream = listener.wait()
         while True:
             # Read data from collection
-            stream = listener.wait()
-            data = stream.read(64)
+            close = stream.closed
+            if close:
+                break
+            data = stream.readlines()
             if not data:
                 if completed.is_set():
                     break  # Exit loop if completed event is set
@@ -204,7 +207,7 @@ def _listen_on_pipe_new(listener, result: List[str], completed: threading.Event)
                     # On timeout, append all collected data to result and return
                     # result.append("".join(all_data))
                     return
-            data_decoded = data.decode("utf-8")
+            data_decoded = "".join(data)
             all_data.append(data_decoded)
         # Append all collected data to result array
         result.append("".join(all_data))
@@ -268,7 +271,7 @@ def runner_with_cwd(
     if os.name == "nt":
         #     # TODO: for windows
         #     print("windows machine detected")
-        with NPopen("r+") as pipe:  # Added a `name` parameter
+        with NPopen("rt", name=pipe_name) as pipe:  # Added a `name` parameter
             env = os.environ.copy()
             env.update(
                 {

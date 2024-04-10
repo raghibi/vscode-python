@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 import * as path from 'path';
 import { Uri } from 'vscode';
+import * as fs from 'fs';
 import {
     ExecutionFactoryCreateWithEnvironmentOptions,
     IPythonExecutionFactory,
@@ -10,15 +11,21 @@ import {
 import { IConfigurationService, ITestOutputChannel } from '../../../common/types';
 import { Deferred, createDeferred } from '../../../common/utils/async';
 import { EXTENSION_ROOT_DIR } from '../../../constants';
-import { traceError, traceInfo, traceVerbose } from '../../../logging';
-import { DiscoveredTestPayload, EOTTestPayload, ITestDiscoveryAdapter, ITestResultResolver } from '../common/types';
+import { traceError, traceInfo, traceVerbose, traceWarn } from '../../../logging';
+import {
+    DataReceivedEvent,
+    DiscoveredTestPayload,
+    ITestDiscoveryAdapter,
+    ITestResultResolver,
+    ITestServer,
+} from '../common/types';
 import {
     MESSAGE_ON_TESTING_OUTPUT_MOVE,
     createDiscoveryErrorPayload,
     createEOTPayload,
     createTestingDeferred,
     fixLogLinesNoTrailing,
-    startDiscoveryNamedPipe,
+    addValueIfKeyNotExist,
 } from '../common/utils';
 import { IEnvironmentVariablesProvider } from '../../../common/variables/types';
 
@@ -52,17 +59,19 @@ export class PytestTestDiscoveryAdapter implements ITestDiscoveryAdapter {
         return discoveryPayload;
     }
 
-    async runPytestDiscovery(
-        uri: Uri,
-        discoveryPipeName: string,
-        deferredTillEOT: Deferred<void>,
-        executionFactory?: IPythonExecutionFactory,
-    ): Promise<void> {
-        const relativePathToPytest = 'pythonFiles';
+    async runPytestDiscovery(uri: Uri, uuid: string, executionFactory?: IPythonExecutionFactory): Promise<void> {
+        const relativePathToPytest = 'python_files';
         const fullPluginPath = path.join(EXTENSION_ROOT_DIR, relativePathToPytest);
         const settings = this.configSettings.getSettings(uri);
-        const { pytestArgs } = settings.testing;
+        let { pytestArgs } = settings.testing;
         const cwd = settings.testing.cwd && settings.testing.cwd.length > 0 ? settings.testing.cwd : uri.fsPath;
+
+        // check for symbolic path
+        const stats = fs.lstatSync(cwd);
+        if (stats.isSymbolicLink()) {
+            traceWarn("The cwd is a symbolic link, adding '--rootdir' to pytestArgs only if it doesn't already exist.");
+            pytestArgs = addValueIfKeyNotExist(pytestArgs, '--rootdir', cwd);
+        }
 
         // get and edit env vars
         const mutableEnv = {

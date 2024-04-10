@@ -2,9 +2,8 @@
 // Licensed under the MIT License.
 import * as net from 'net';
 import * as path from 'path';
-import { CancellationToken, Position, TestController, TestItem, Uri, Range, Disposable } from 'vscode';
-import { Message } from 'vscode-jsonrpc';
-import { traceError, traceLog, traceVerbose } from '../../../logging';
+import { CancellationToken, Position, TestController, TestItem, Uri, Range } from 'vscode';
+import { traceError, traceInfo, traceLog, traceVerbose } from '../../../logging';
 
 import { EnableTestAdapterRewrite } from '../../../common/experiments/groups';
 import { IExperimentService } from '../../../common/types';
@@ -462,4 +461,42 @@ export function splitTestNameWithRegex(testName: string): [string, string] {
         return [match[1].trim(), match[2] || match[3] || testName];
     }
     return [testName, testName];
+}
+
+/**
+ * Takes a list of arguments and adds an key-value pair to the list if the key doesn't already exist. Searches each element
+ * in the array for the key to see if it is contained within the element.
+ * @param args list of arguments to search
+ * @param argToAdd argument to add if it doesn't already exist
+ * @returns the list of arguments with the key-value pair added if it didn't already exist
+ */
+export function addValueIfKeyNotExist(args: string[], key: string, value: string | null): string[] {
+    for (const arg of args) {
+        if (arg.includes(key)) {
+            traceInfo(`arg: ${key} already exists in args, not adding.`);
+            return args;
+        }
+    }
+    if (value) {
+        args.push(`${key}=${value}`);
+    } else {
+        args.push(`${key}`);
+    }
+    return args;
+}
+
+/**
+ * Checks if a key exists in a list of arguments. Searches each element in the array
+ *  for the key to see if it is contained within the element.
+ * @param args list of arguments to search
+ * @param key string to search for
+ * @returns true if the key exists in the list of arguments, false otherwise
+ */
+export function argKeyExists(args: string[], key: string): boolean {
+    for (const arg of args) {
+        if (arg.includes(key)) {
+            return true;
+        }
+    }
+    return false;
 }

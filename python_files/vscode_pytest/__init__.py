@@ -70,6 +70,25 @@ def pytest_load_initial_conftests(early_config, parser, args):
         global IS_DISCOVERY
         IS_DISCOVERY = True
 
+    # check if --rootdir is in the args
+    for arg in args:
+        if "--rootdir=" in arg:
+            rootdir = arg.split("--rootdir=")[1]
+            if not os.path.exists(rootdir):
+                raise VSCodePytestError(
+                    f"The path set in the argument --rootdir={rootdir} does not exist."
+                )
+            if (
+                os.path.islink(rootdir)
+                and pathlib.Path(os.path.realpath(rootdir)) == pathlib.Path.cwd()
+            ):
+                print(
+                    f"Plugin info[vscode-pytest]: rootdir argument, {rootdir}, is identified as a symlink to the cwd, {pathlib.Path.cwd()}.",
+                    "Therefore setting symlink path to rootdir argument.",
+                )
+                global SYMLINK_PATH
+                SYMLINK_PATH = pathlib.Path(rootdir)
+
 
 def pytest_internalerror(excrepr, excinfo):
     """A pytest hook that is called when an internal error occurs.
@@ -97,13 +116,9 @@ def pytest_exception_interact(node, call, report):
         if call.excinfo and call.excinfo.typename != "AssertionError":
             if report.outcome == "skipped" and "SkipTest" in str(call):
                 return
-            ERRORS.append(
-                call.excinfo.exconly() + "\n Check Python Test Logs for more details."
-            )
+            ERRORS.append(call.excinfo.exconly() + "\n Check Python Test Logs for more details.")
         else:
-            ERRORS.append(
-                report.longreprtext + "\n Check Python Test Logs for more details."
-            )
+            ERRORS.append(report.longreprtext + "\n Check Python Test Logs for more details.")
     else:
         # If during execution, send this data that the given node failed.
         report_value = "error"
@@ -200,6 +215,8 @@ def pytest_report_teststatus(report, config):
     config -- configuration object.
     """
     cwd = pathlib.Path.cwd()
+    if SYMLINK_PATH:
+        cwd = SYMLINK_PATH
 
     if report.when == "call":
         traceback = None
@@ -321,6 +338,10 @@ def pytest_sessionfinish(session, exitstatus):
     Exit code 5: No tests were collected
     """
     cwd = pathlib.Path.cwd()
+    if SYMLINK_PATH:
+        print("Plugin warning[vscode-pytest]: SYMLINK set, adjusting cwd.")
+        cwd = pathlib.Path(SYMLINK_PATH)
+
     if IS_DISCOVERY:
         if not (exitstatus == 0 or exitstatus == 1 or exitstatus == 5):
             errorNode: TestNode = {
@@ -384,6 +405,11 @@ def build_test_tree(session: pytest.Session) -> TestNode:
     class_nodes_dict: Dict[str, TestNode] = {}
     function_nodes_dict: Dict[str, TestNode] = {}
 
+    # Check to see if the global variable for symlink path is set
+    if SYMLINK_PATH:
+        session_node["path"] = SYMLINK_PATH
+        session_node["id_"] = os.fspath(SYMLINK_PATH)
+
     for test_case in session.items:
         test_node = create_test_node(test_case)
         if isinstance(test_case.parent, pytest.Class):
@@ -414,10 +440,7 @@ def build_test_tree(session: pytest.Session) -> TestNode:
                 test_file_node = create_file_node(parent_module)
                 file_nodes_dict[parent_module] = test_file_node
             # Check if the class is already a child of the file node.
-            if (
-                test_class_node is not None
-                and test_class_node not in test_file_node["children"]
-            ):
+            if test_class_node is not None and test_class_node not in test_file_node["children"]:
                 test_file_node["children"].append(test_class_node)
         elif hasattr(test_case, "callspec"):  # This means it is a parameterized test.
             function_name: str = ""
@@ -432,9 +455,7 @@ def build_test_tree(session: pytest.Session) -> TestNode:
                 ERRORS.append(
                     f"unable to find original name for {test_case.name} with parameterization detected."
                 )
-                raise VSCodePytestError(
-                    "Unable to find original name for parameterized test case"
-                )
+                raise VSCodePytestError("Unable to find original name for parameterized test case")
             except KeyError:
                 function_test_case: TestNode = create_parameterized_function_node(
                     function_name, get_node_path(test_case), test_case.nodeid
@@ -491,13 +512,9 @@ def build_nested_folders(
     while iterator_path != get_node_path(session):
         curr_folder_name = iterator_path.name
         try:
-            curr_folder_node: TestNode = created_files_folders_dict[
-                os.fspath(iterator_path)
-            ]
+            curr_folder_node: TestNode = created_files_folders_dict[os.fspath(iterator_path)]
         except KeyError:
-            curr_folder_node: TestNode = create_folder_node(
-                curr_folder_name, iterator_path
-            )
+            curr_folder_node: TestNode = create_folder_node(curr_folder_name, iterator_path)
             created_files_folders_dict[os.fspath(iterator_path)] = curr_folder_node
         if prev_folder_node not in curr_folder_node["children"]:
             curr_folder_node["children"].append(prev_folder_node)
@@ -641,10 +658,13 @@ class EOTPayloadDict(TypedDict):
 
 
 def get_node_path(node: Any) -> pathlib.Path:
-    """A function that returns the path of a node given the switch to pathlib.Path."""
-    path = getattr(node, "path", None) or pathlib.Path(node.fspath)
+    """
+    A function that returns the path of a node given the switch to pathlib.Path.
+    It also evaluates if the node is a symlink and returns the equivalent path.
+    """
+    node_path = getattr(node, "path", None) or pathlib.Path(node.fspath)
 
-    if not path:
+    if not node_path:
         raise VSCodePytestError(
             f"Unable to find path for node: {node}, node.path: {node.path}, node.fspath: {node.fspath}"
         )
@@ -684,7 +704,6 @@ def post_response(cwd: str, session_node: TestNode) -> None:
         cwd (str): Current working directory.
         session_node (TestNode): Node information of the test session.
     """
-
     payload: DiscoveryPayloadDict = {
         "cwd": cwd,
         "status": "success" if not ERRORS else "error",

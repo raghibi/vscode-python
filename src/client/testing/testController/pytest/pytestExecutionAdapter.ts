@@ -101,7 +101,7 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
         executionFactory?: IPythonExecutionFactory,
         debugLauncher?: ITestDebugLauncher,
     ): Promise<ExecutionTestPayload> {
-        const relativePathToPytest = 'pythonFiles';
+        const relativePathToPytest = 'python_files';
         const fullPluginPath = path.join(EXTENSION_ROOT_DIR, relativePathToPytest);
         const settings = this.configSettings.getSettings(uri);
         const { pytestArgs } = settings.testing;
@@ -125,16 +125,16 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
         const execService = await executionFactory?.createActivatedEnvironment(creationOptions);
         try {
             // Remove positional test folders and files, we will add as needed per node
-            const testArgs = removePositionalFoldersAndFiles(pytestArgs);
+            let testArgs = removePositionalFoldersAndFiles(pytestArgs);
 
             // if user has provided `--rootdir` then use that, otherwise add `cwd`
-            if (testArgs.filter((a) => a.startsWith('--rootdir')).length === 0) {
-                // Make sure root dir is set so pytest can find the relative paths
-                testArgs.splice(0, 0, '--rootdir', uri.fsPath);
-            }
+            // root dir is required so pytest can find the relative paths and for symlinks
+            utils.addValueIfKeyNotExist(testArgs, '--rootdir', cwd);
 
-            if (debugBool && !testArgs.some((a) => a.startsWith('--capture') || a === '-s')) {
-                testArgs.push('--capture', 'no');
+            // -s and --capture are both command line options that control how pytest captures output.
+            // if neither are set, then set --capture=no to prevent pytest from capturing output.
+            if (debugBool && !utils.argKeyExists(testArgs, '-s')) {
+                testArgs = utils.addValueIfKeyNotExist(testArgs, '--capture', 'no');
             }
 
             // add port with run test ids to env vars
@@ -159,9 +159,7 @@ export class PytestTestExecutionAdapter implements ITestExecutionAdapter {
                     runTestIdsPort: testIdsPipeName,
                     pytestPort: resultNamedPipeName,
                 };
-                traceInfo(
-                    `Running DEBUG pytest with arguments: ${testArgs.join(' ')} for workspace ${uri.fsPath} \r\n`,
-                );
+                traceInfo(`Running DEBUG pytest with arguments: ${testArgs} for workspace ${uri.fsPath} \r\n`);
                 await debugLauncher!.launchDebugger(launchOptions, () => {
                     serverDispose(); // this will resolve deferredTillServerClose
                     deferredTillEOT?.resolve();

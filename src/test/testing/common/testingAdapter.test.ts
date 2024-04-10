@@ -5,6 +5,7 @@ import { TestController, TestRun, Uri } from 'vscode';
 import * as typeMoq from 'typemoq';
 import * as path from 'path';
 import * as assert from 'assert';
+import * as fs from 'fs';
 import { PytestTestDiscoveryAdapter } from '../../../client/testing/testController/pytest/pytestDiscoveryAdapter';
 import { ITestController, ITestResultResolver } from '../../../client/testing/testController/common/types';
 import { IPythonExecutionFactory } from '../../../client/common/process/types';
@@ -55,8 +56,29 @@ suite('End to End Tests: test adapters', () => {
         'testTestingRootWkspc',
         'discoveryErrorWorkspace',
     );
+    const rootPathDiscoverySymlink = path.join(
+        EXTENSION_ROOT_DIR_FOR_TESTS,
+        'src',
+        'testTestingRootWkspc',
+        'symlinkWorkspace',
+    );
     suiteSetup(async () => {
         serviceContainer = (await initialize()).serviceContainer;
+
+        // create symlink for specific symlink test
+        const target = rootPathSmallWorkspace;
+        const dest = rootPathDiscoverySymlink;
+        try {
+            fs.symlink(target, dest, 'dir', (err) => {
+                if (err) {
+                    console.error(err);
+                } else {
+                    console.log('Symlink created successfully for end to end tests.');
+                }
+            });
+        } catch (err) {
+            console.error(err);
+        }
     });
 
     setup(async () => {
@@ -85,6 +107,24 @@ suite('End to End Tests: test adapters', () => {
             .returns(() => {
                 // Whatever you need to return
             });
+    });
+    teardown(async () => {
+        pythonTestServer.dispose();
+    });
+    suiteTeardown(async () => {
+        // remove symlink
+        const dest = rootPathDiscoverySymlink;
+        if (fs.existsSync(dest)) {
+            fs.unlink(dest, (err) => {
+                if (err) {
+                    console.error(err);
+                } else {
+                    console.log('Symlink removed successfully after tests.');
+                }
+            });
+        } else {
+            console.log('Symlink was not found to remove after tests, exiting successfully');
+        }
     });
     test('unittest discovery adapter small workspace', async () => {
         // result resolver and saved data for assertions
@@ -186,23 +226,23 @@ suite('End to End Tests: test adapters', () => {
             status: 'success' | 'error';
             error?: string[];
         };
-        // set workspace to test workspace folder
-        workspaceUri = Uri.parse(rootPathSmallWorkspace);
         resultResolver = new PythonResultResolver(testController, pytestProvider, workspaceUri);
         let callCount = 0;
         resultResolver._resolveDiscovery = async (payload, _token?) => {
-            console.log(`resolveDiscovery ${payload}`);
+            traceLog(`resolveDiscovery ${payload}`);
             callCount = callCount + 1;
             actualData = payload;
             return Promise.resolve();
         };
         // run pytest discovery
         const discoveryAdapter = new PytestTestDiscoveryAdapter(
+            pythonTestServer,
             configService,
             testOutputChannel.object,
             resultResolver,
             envVarsService,
         );
+        configService.getSettings(workspaceUri).testing.pytestArgs = [];
 
         await discoveryAdapter.discoverTests(workspaceUri, pythonExecFactory).finally(() => {
             // verification after discovery is complete
@@ -216,7 +256,127 @@ suite('End to End Tests: test adapters', () => {
             assert.strictEqual(actualData.error?.length, 0, "Expected no errors in 'error' field");
             // 3. Confirm tests are found
             assert.ok(actualData.tests, 'Expected tests to be present');
+            // 4. Confirm that the cwd returned is the symlink path and the test's path is also using the symlink as the root
+            if (process.platform === 'win32') {
+                // covert string to lowercase for windows as the path is case insensitive
+                traceLog('windows machine detected, converting path to lowercase for comparison');
+                const a = actualData.cwd.toLowerCase();
+                const b = rootPathDiscoverySymlink.toLowerCase();
+                const testSimpleActual = (actualData.tests as {
+                    children: {
+                        path: string;
+                    }[];
+                }).children[0].path.toLowerCase();
+                const testSimpleExpected = testSimpleSymlinkPath.toLowerCase();
+                assert.strictEqual(a, b, `Expected cwd to be the symlink path actual: ${a} expected: ${b}`);
+                assert.strictEqual(
+                    testSimpleActual,
+                    testSimpleExpected,
+                    `Expected test path to be the symlink path actual: ${testSimpleActual} expected: ${testSimpleExpected}`,
+                );
+            } else {
+                assert.strictEqual(
+                    path.join(actualData.cwd),
+                    path.join(rootPathDiscoverySymlink),
+                    'Expected cwd to be the symlink path, check for non-windows machines',
+                );
+                assert.strictEqual(
+                    (actualData.tests as {
+                        children: {
+                            path: string;
+                        }[];
+                    }).children[0].path,
+                    testSimpleSymlinkPath,
+                    'Expected test path to be the symlink path, check for non windows machines',
+                );
+            }
 
+            // 5. Confirm that resolveDiscovery was called once
+            assert.strictEqual(callCount, 1, 'Expected _resolveDiscovery to be called once');
+        });
+    });
+    test('pytest discovery adapter small workspace with symlink', async () => {
+        // result resolver and saved data for assertions
+        let actualData: {
+            cwd: string;
+            tests?: unknown;
+            status: 'success' | 'error';
+            error?: string[];
+        };
+        // set workspace to test workspace folder
+        const testSimpleSymlinkPath = path.join(rootPathDiscoverySymlink, 'test_simple.py');
+        workspaceUri = Uri.parse(rootPathDiscoverySymlink);
+        const stats = fs.lstatSync(rootPathDiscoverySymlink);
+
+        // confirm that the path is a symbolic link
+        assert.ok(stats.isSymbolicLink(), 'The path is not a symbolic link but must be for this test.');
+
+        resultResolver = new PythonResultResolver(testController, pytestProvider, workspaceUri);
+        let callCount = 0;
+        resultResolver._resolveDiscovery = async (payload, _token?) => {
+            traceLog(`resolveDiscovery ${payload}`);
+            callCount = callCount + 1;
+            actualData = payload;
+            return Promise.resolve();
+        };
+        // run pytest discovery
+        const discoveryAdapter = new PytestTestDiscoveryAdapter(
+            pythonTestServer,
+            configService,
+            testOutputChannel.object,
+            resultResolver,
+            envVarsService,
+        );
+        configService.getSettings(workspaceUri).testing.pytestArgs = [];
+
+        await discoveryAdapter.discoverTests(workspaceUri, pythonExecFactory).finally(() => {
+            // verification after discovery is complete
+
+            // 1. Check the status is "success"
+            assert.strictEqual(
+                actualData.status,
+                'success',
+                `Expected status to be 'success' instead status is ${actualData.status}`,
+            ); // 2. Confirm no errors
+            assert.strictEqual(actualData.error?.length, 0, "Expected no errors in 'error' field");
+            // 3. Confirm tests are found
+            assert.ok(actualData.tests, 'Expected tests to be present');
+            // 4. Confirm that the cwd returned is the symlink path and the test's path is also using the symlink as the root
+            if (process.platform === 'win32') {
+                // covert string to lowercase for windows as the path is case insensitive
+                traceLog('windows machine detected, converting path to lowercase for comparison');
+                const a = actualData.cwd.toLowerCase();
+                const b = rootPathDiscoverySymlink.toLowerCase();
+                const testSimpleActual = (actualData.tests as {
+                    children: {
+                        path: string;
+                    }[];
+                }).children[0].path.toLowerCase();
+                const testSimpleExpected = testSimpleSymlinkPath.toLowerCase();
+                assert.strictEqual(a, b, `Expected cwd to be the symlink path actual: ${a} expected: ${b}`);
+                assert.strictEqual(
+                    testSimpleActual,
+                    testSimpleExpected,
+                    `Expected test path to be the symlink path actual: ${testSimpleActual} expected: ${testSimpleExpected}`,
+                );
+            } else {
+                assert.strictEqual(
+                    path.join(actualData.cwd),
+                    path.join(rootPathDiscoverySymlink),
+                    'Expected cwd to be the symlink path, check for non-windows machines',
+                );
+                assert.strictEqual(
+                    (actualData.tests as {
+                        children: {
+                            path: string;
+                        }[];
+                    }).children[0].path,
+                    testSimpleSymlinkPath,
+                    'Expected test path to be the symlink path, check for non windows machines',
+                );
+            }
+
+            // 5. Confirm that resolveDiscovery was called once
             assert.strictEqual(callCount, 1, 'Expected _resolveDiscovery to be called once');
         });
     });
@@ -246,6 +406,7 @@ suite('End to End Tests: test adapters', () => {
 
         // set workspace to test workspace folder
         workspaceUri = Uri.parse(rootPathLargeWorkspace);
+        configService.getSettings(workspaceUri).testing.pytestArgs = [];
 
         await discoveryAdapter.discoverTests(workspaceUri, pythonExecFactory).finally(() => {
             // verification after discovery is complete
@@ -442,6 +603,7 @@ suite('End to End Tests: test adapters', () => {
         };
         // set workspace to test workspace folder
         workspaceUri = Uri.parse(rootPathSmallWorkspace);
+        configService.getSettings(workspaceUri).testing.pytestArgs = [];
 
         // run pytest execution
         const executionAdapter = new PytestTestExecutionAdapter(
@@ -531,6 +693,7 @@ suite('End to End Tests: test adapters', () => {
 
         // set workspace to test workspace folder
         workspaceUri = Uri.parse(rootPathLargeWorkspace);
+        configService.getSettings(workspaceUri).testing.pytestArgs = [];
 
         // generate list of test_ids
         const testIds: string[] = [];
@@ -610,6 +773,7 @@ suite('End to End Tests: test adapters', () => {
 
         // set workspace to test workspace folder
         workspaceUri = Uri.parse(rootPathDiscoveryErrorWorkspace);
+        configService.getSettings(workspaceUri).testing.unittestArgs = ['-s', '.', '-p', '*test*.py'];
 
         const discoveryAdapter = new UnittestTestDiscoveryAdapter(
             configService,
@@ -679,6 +843,8 @@ suite('End to End Tests: test adapters', () => {
 
         // set workspace to test workspace folder
         workspaceUri = Uri.parse(rootPathDiscoveryErrorWorkspace);
+        configService.getSettings(workspaceUri).testing.pytestArgs = [];
+
         await discoveryAdapter.discoverTests(workspaceUri, pythonExecFactory).finally(() => {
             // verification after discovery is complete
             assert.ok(
@@ -740,6 +906,7 @@ suite('End to End Tests: test adapters', () => {
 
         // set workspace to test workspace folder
         workspaceUri = Uri.parse(rootPathErrorWorkspace);
+        configService.getSettings(workspaceUri).testing.unittestArgs = ['-s', '.', '-p', '*test*.py'];
 
         // run pytest execution
         const executionAdapter = new UnittestTestExecutionAdapter(
@@ -800,6 +967,7 @@ suite('End to End Tests: test adapters', () => {
 
         // set workspace to test workspace folder
         workspaceUri = Uri.parse(rootPathErrorWorkspace);
+        configService.getSettings(workspaceUri).testing.pytestArgs = [];
 
         // run pytest execution
         const executionAdapter = new PytestTestExecutionAdapter(

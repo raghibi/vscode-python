@@ -1,22 +1,22 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
+import json
 import os
-import pathlib
 import shutil
 import sys
 from typing import Any, Dict, List, Optional
 
 import pytest
 
-script_dir = pathlib.Path(__file__).parent.parent
-sys.path.append(os.fspath(script_dir))
+from tests.tree_comparison_helper import is_same_tree  # noqa: E402
 
-from tests.tree_comparison_helper import is_same_tree
-
-from . import expected_discovery_test_output
-from .helpers import TEST_DATA_PATH, runner, runner_with_cwd
+from . import expected_discovery_test_output, helpers  # noqa: E402
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="See https://github.com/microsoft/vscode-python/issues/22965",
+)
 def test_import_error(tmp_path):
     """Test pytest discovery on a file that has a pytest marker but does not import pytest.
 
@@ -31,21 +31,19 @@ def test_import_error(tmp_path):
     # Saving some files as .txt to avoid that file displaying a syntax error for
     # the extension as a whole. Instead, rename it before running this test
     # in order to test the error handling.
-    file_path = TEST_DATA_PATH / "error_pytest_import.txt"
+    file_path = helpers.TEST_DATA_PATH / "error_pytest_import.txt"
     temp_dir = tmp_path / "temp_data"
     temp_dir.mkdir()
     p = temp_dir / "error_pytest_import.py"
     shutil.copyfile(file_path, p)
-    actual: Optional[List[Dict[str, Any]]] = runner(["--collect-only", os.fspath(p)])
+    actual: Optional[List[Dict[str, Any]]] = helpers.runner(["--collect-only", os.fspath(p)])
     assert actual
     actual_list: List[Dict[str, Any]] = actual
     if actual_list is not None:
         for actual_item in actual_list:
-            assert all(
-                item in actual_item.keys() for item in ("status", "cwd", "error")
-            )
+            assert all(item in actual_item.keys() for item in ("status", "cwd", "error"))
             assert actual_item.get("status") == "error"
-            assert actual_item.get("cwd") == os.fspath(TEST_DATA_PATH)
+            assert actual_item.get("cwd") == os.fspath(helpers.TEST_DATA_PATH)
 
             # Ensure that 'error' is a list and then check its length
             error_content = actual_item.get("error")
@@ -57,6 +55,10 @@ def test_import_error(tmp_path):
                 assert False
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="See https://github.com/microsoft/vscode-python/issues/22965",
+)
 def test_syntax_error(tmp_path):
     """Test pytest discovery on a file that has a syntax error.
 
@@ -71,21 +73,19 @@ def test_syntax_error(tmp_path):
     # Saving some files as .txt to avoid that file displaying a syntax error for
     # the extension as a whole. Instead, rename it before running this test
     # in order to test the error handling.
-    file_path = TEST_DATA_PATH / "error_syntax_discovery.txt"
+    file_path = helpers.TEST_DATA_PATH / "error_syntax_discovery.txt"
     temp_dir = tmp_path / "temp_data"
     temp_dir.mkdir()
     p = temp_dir / "error_syntax_discovery.py"
     shutil.copyfile(file_path, p)
-    actual = runner(["--collect-only", os.fspath(p)])
+    actual = helpers.runner(["--collect-only", os.fspath(p)])
     assert actual
     actual_list: List[Dict[str, Any]] = actual
     if actual_list is not None:
         for actual_item in actual_list:
-            assert all(
-                item in actual_item.keys() for item in ("status", "cwd", "error")
-            )
+            assert all(item in actual_item.keys() for item in ("status", "cwd", "error"))
             assert actual_item.get("status") == "error"
-            assert actual_item.get("cwd") == os.fspath(TEST_DATA_PATH)
+            assert actual_item.get("cwd") == os.fspath(helpers.TEST_DATA_PATH)
 
             # Ensure that 'error' is a list and then check its length
             error_content = actual_item.get("error")
@@ -103,16 +103,14 @@ def test_parameterized_error_collect():
     The json should still be returned but the errors list should be present.
     """
     file_path_str = "error_parametrize_discovery.py"
-    actual = runner(["--collect-only", file_path_str])
+    actual = helpers.runner(["--collect-only", file_path_str])
     assert actual
     actual_list: List[Dict[str, Any]] = actual
     if actual_list is not None:
         for actual_item in actual_list:
-            assert all(
-                item in actual_item.keys() for item in ("status", "cwd", "error")
-            )
+            assert all(item in actual_item.keys() for item in ("status", "cwd", "error"))
             assert actual_item.get("status") == "error"
-            assert actual_item.get("cwd") == os.fspath(TEST_DATA_PATH)
+            assert actual_item.get("cwd") == os.fspath(helpers.TEST_DATA_PATH)
 
             # Ensure that 'error' is a list and then check its length
             error_content = actual_item.get("error")
@@ -184,10 +182,10 @@ def test_pytest_collect(file, expected_const):
     file -- a string with the file or folder to run pytest discovery on.
     expected_const -- the expected output from running pytest discovery on the file.
     """
-    actual = runner(
+    actual = helpers.runner(
         [
             "--collect-only",
-            os.fspath(TEST_DATA_PATH / file),
+            os.fspath(helpers.TEST_DATA_PATH / file),
         ]
     )
 
@@ -197,8 +195,47 @@ def test_pytest_collect(file, expected_const):
         actual_item = actual_list.pop(0)
         assert all(item in actual_item.keys() for item in ("status", "cwd", "error"))
         assert actual_item.get("status") == "success"
-        assert actual_item.get("cwd") == os.fspath(TEST_DATA_PATH)
-        assert is_same_tree(actual_item.get("tests"), expected_const)
+        assert actual_item.get("cwd") == os.fspath(helpers.TEST_DATA_PATH)
+        assert not is_same_tree(
+            actual_item.get("tests"), expected_const
+        ), f"Tests tree does not match expected value. \n Expected: {json.dumps(expected_const, indent=4)}. \n Actual: {json.dumps(actual_item.get('tests'), indent=4)}"
+
+
+def test_symlink_root_dir():
+    """
+    Test to test pytest discovery with the command line arg --rootdir specified as a symlink path.
+    Discovery should succeed and testids should be relative to the symlinked root directory.
+    """
+    with helpers.create_symlink(helpers.TEST_DATA_PATH, "root", "symlink_folder") as (
+        source,
+        destination,
+    ):
+        assert destination.is_symlink()
+
+        # Run pytest with the cwd being the resolved symlink path (as it will be when we run the subprocess from node).
+        actual = helpers.runner_with_cwd(
+            ["--collect-only", f"--rootdir={os.fspath(destination)}"], source
+        )
+        expected = expected_discovery_test_output.symlink_expected_discovery_output
+        assert actual
+        actual_list: List[Dict[str, Any]] = actual
+        if actual_list is not None:
+            assert actual_list.pop(-1).get("eot")
+            actual_item = actual_list.pop(0)
+            try:
+                # Check if all requirements
+                assert all(
+                    item in actual_item.keys() for item in ("status", "cwd", "error")
+                ), "Required keys are missing"
+                assert actual_item.get("status") == "success", "Status is not 'success'"
+                assert actual_item.get("cwd") == os.fspath(
+                    destination
+                ), f"CWD does not match: {os.fspath(destination)}"
+                assert actual_item.get("tests") == expected, "Tests do not match expected value"
+            except AssertionError as e:
+                # Print the actual_item in JSON format if an assertion fails
+                print(json.dumps(actual_item, indent=4))
+                pytest.fail(str(e))
 
 
 def test_pytest_root_dir():
@@ -206,13 +243,13 @@ def test_pytest_root_dir():
     Test to test pytest discovery with the command line arg --rootdir specified to be a subfolder
     of the workspace root. Discovery should succeed and testids should be relative to workspace root.
     """
-    rd = f"--rootdir={TEST_DATA_PATH / 'root' / 'tests'}"
-    actual = runner_with_cwd(
+    rd = f"--rootdir={helpers.TEST_DATA_PATH / 'root' / 'tests'}"
+    actual = helpers.runner_with_cwd(
         [
             "--collect-only",
             rd,
         ],
-        TEST_DATA_PATH / "root",
+        helpers.TEST_DATA_PATH / "root",
     )
     assert actual
     actual_list: List[Dict[str, Any]] = actual
@@ -221,11 +258,11 @@ def test_pytest_root_dir():
 
         assert all(item in actual_item.keys() for item in ("status", "cwd", "error"))
         assert actual_item.get("status") == "success"
-        assert actual_item.get("cwd") == os.fspath(TEST_DATA_PATH / "root")
+        assert actual_item.get("cwd") == os.fspath(helpers.TEST_DATA_PATH / "root")
         assert is_same_tree(
             actual_item.get("tests"),
             expected_discovery_test_output.root_with_config_expected_output,
-        )
+        ), f"Tests tree does not match expected value. \n Expected: {json.dumps(expected_discovery_test_output.root_with_config_expected_output, indent=4)}. \n Actual: {json.dumps(actual_item.get('tests'), indent=4)}"
 
 
 def test_pytest_config_file():
@@ -233,12 +270,12 @@ def test_pytest_config_file():
     Test to test pytest discovery with the command line arg -c with a specified config file which
     changes the workspace root. Discovery should succeed and testids should be relative to workspace root.
     """
-    actual = runner_with_cwd(
+    actual = helpers.runner_with_cwd(
         [
             "--collect-only",
             "tests/",
         ],
-        TEST_DATA_PATH / "root",
+        helpers.TEST_DATA_PATH / "root",
     )
     assert actual
     actual_list: List[Dict[str, Any]] = actual
@@ -247,8 +284,8 @@ def test_pytest_config_file():
 
         assert all(item in actual_item.keys() for item in ("status", "cwd", "error"))
         assert actual_item.get("status") == "success"
-        assert actual_item.get("cwd") == os.fspath(TEST_DATA_PATH / "root")
+        assert actual_item.get("cwd") == os.fspath(helpers.TEST_DATA_PATH / "root")
         assert is_same_tree(
             actual_item.get("tests"),
             expected_discovery_test_output.root_with_config_expected_output,
-        )
+        ), f"Tests tree does not match expected value. \n Expected: {json.dumps(expected_discovery_test_output.root_with_config_expected_output, indent=4)}. \n Actual: {json.dumps(actual_item.get('tests'), indent=4)}"

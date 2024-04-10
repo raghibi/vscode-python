@@ -9,6 +9,8 @@ import {
     ExtractJsonRPCData,
     parseJsonRPCHeadersAndData,
     splitTestNameWithRegex,
+    argKeyExists,
+    addValueIfKeyNotExist,
 } from '../../../client/testing/testController/common/utils';
 
 suite('Test Controller Utils: JSON RPC', () => {
@@ -155,6 +157,45 @@ ${data}${secondPayload}`;
             test(`splitTestNameWithRegex: ${testCase.name}`, () => {
                 const splitResult = splitTestNameWithRegex(testCase.input);
                 assert.deepStrictEqual(splitResult, [testCase.expectedParent, testCase.expectedSubtest]);
+            });
+        });
+    });
+    suite('Test Controller Utils: Args Mapping', () => {
+        suite('addValueIfKeyNotExist', () => {
+            test('should add key-value pair if key does not exist', () => {
+                const args = ['key1=value1', 'key2=value2'];
+                const result = addValueIfKeyNotExist(args, 'key3', 'value3');
+                assert.deepEqual(result, ['key1=value1', 'key2=value2', 'key3=value3']);
+            });
+
+            test('should not add key-value pair if key already exists', () => {
+                const args = ['key1=value1', 'key2=value2'];
+                const result = addValueIfKeyNotExist(args, 'key1', 'value3');
+                assert.deepEqual(result, ['key1=value1', 'key2=value2']);
+            });
+            test('should not add key-value pair if key exists as a solo element', () => {
+                const args = ['key1=value1', 'key2'];
+                const result = addValueIfKeyNotExist(args, 'key2', 'yellow');
+                assert.deepEqual(result, ['key1=value1', 'key2']);
+            });
+            test('add just key if value is null', () => {
+                const args = ['key1=value1', 'key2'];
+                const result = addValueIfKeyNotExist(args, 'key3', null);
+                assert.deepEqual(result, ['key1=value1', 'key2', 'key3']);
+            });
+        });
+
+        suite('argKeyExists', () => {
+            test('should return true if key exists', () => {
+                const args = ['key1=value1', 'key2=value2'];
+                const result = argKeyExists(args, 'key1');
+                assert.deepEqual(result, true);
+            });
+
+            test('should return false if key does not exist', () => {
+                const args = ['key1=value1', 'key2=value2'];
+                const result = argKeyExists(args, 'key3');
+                assert.deepEqual(result, false);
             });
         });
     });

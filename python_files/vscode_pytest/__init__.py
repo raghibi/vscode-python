@@ -15,8 +15,8 @@ script_dir = pathlib.Path(__file__).parent.parent
 sys.path.append(os.fspath(script_dir))
 sys.path.append(os.fspath(script_dir / "lib" / "python"))
 
-from testing_tools import socket_manager
-from typing import Any, Dict, List, Optional, Union, TypedDict, Literal
+from testing_tools import socket_manager  # noqa: E402
+from typing import Any, Dict, List, Optional, Union, TypedDict, Literal  # noqa: E402
 
 
 class TestData(TypedDict):
@@ -53,6 +53,7 @@ IS_DISCOVERY = False
 map_id_to_path = dict()
 collected_tests_so_far = list()
 TEST_RUN_PIPE = os.getenv("TEST_RUN_PIPE")
+SYMLINK_PATH = None
 
 
 def pytest_load_initial_conftests(early_config, parser, args):
@@ -389,7 +390,6 @@ def pytest_sessionfinish(session, exitstatus):
         # send end of transmission token
     command_type = "discovery" if IS_DISCOVERY else "execution"
     payload: EOTPayloadDict = {"command_type": command_type, "eot": True}
-    print("payload has been determined end of session finish, type is ", command_type)
     send_post_request(payload)
 
 
@@ -668,7 +668,29 @@ def get_node_path(node: Any) -> pathlib.Path:
         raise VSCodePytestError(
             f"Unable to find path for node: {node}, node.path: {node.path}, node.fspath: {node.fspath}"
         )
-    return path
+
+    # Check for the session node since it has the symlink already.
+    if SYMLINK_PATH and not isinstance(node, pytest.Session):
+        # Get relative between the cwd (resolved path) and the node path.
+        try:
+            # check to see if the node path contains the symlink root already
+            common_path = os.path.commonpath([SYMLINK_PATH, node_path])
+            if common_path == os.fsdecode(SYMLINK_PATH):
+                # node path is already relative to the SYMLINK_PATH root therefore return
+                return node_path
+            else:
+                # if the node path is not a symlink, then we need to calculate the equivalent symlink path
+                # get the relative path between the cwd and the node path (as the node path is not a symlink)
+                rel_path = node_path.relative_to(pathlib.Path.cwd())
+                # combine the difference between the cwd and the node path with the symlink path
+                sym_path = pathlib.Path(os.path.join(SYMLINK_PATH, rel_path))
+                return sym_path
+        except Exception as e:
+            raise VSCodePytestError(
+                f"Error occurred while calculating symlink equivalent from node path: {e}"
+                f"\n SYMLINK_PATH: {SYMLINK_PATH}, \n node path: {node_path}, \n cwd: {pathlib.Path.cwd()}"
+            )
+    return node_path
 
 
 __writer = None
@@ -692,7 +714,6 @@ def execution_post(
     )
     if ERRORS:
         payload["error"] = ERRORS
-    print("ejfb ==== shouldn't hit here it is execuction post")
     send_post_request(payload)
 
 
@@ -712,7 +733,6 @@ def post_response(cwd: str, session_node: TestNode) -> None:
     }
     if ERRORS is not None:
         payload["error"] = ERRORS
-    print("EJFB 1: this is the spot in post response!!!!!!")
     send_post_request(payload, cls_encoder=PathEncoder)
 
 
@@ -769,7 +789,7 @@ def send_post_request(
         "params": payload,
     }
     data = json.dumps(rpc, cls=cls_encoder)
-    print("FYI this is the data im writing \n", data)
+
     try:
         if __writer:
             __writer.write(data)

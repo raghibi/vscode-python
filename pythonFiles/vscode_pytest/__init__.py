@@ -16,8 +16,7 @@ sys.path.append(os.fspath(script_dir))
 sys.path.append(os.fspath(script_dir / "lib" / "python"))
 
 from testing_tools import socket_manager
-from typing import Any, Dict, List, Optional, Union
-from typing_extensions import Literal, TypedDict
+from typing import Any, Dict, List, Optional, Union, TypedDict, Literal
 
 
 class TestData(TypedDict):

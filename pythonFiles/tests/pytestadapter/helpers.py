@@ -25,83 +25,6 @@ from tests.pytestadapter.helpers_new import (
     generate_random_pipe_name,
 )
 
-
-class PipeManager:
-    def __init__(self, name):
-        self.name = name
-
-    def __enter__(self):
-        return self.listen()
-
-    def __exit__(self, *_):
-        self.close()
-
-    def listen(self):
-        # find library that creates named pipes for windows
-
-        if sys.platform == "win32":
-            print("current not enabled for windows")
-
-        else:
-            server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            server.listen(self.name)  # self.name = named pipe
-            (
-                _sock,
-                _,
-            ) = (
-                server.accept()
-            )  # occurs when client connects, returns a socket (_sock) which will be used for this specific
-            # client and server connection
-            self._socket = _sock
-        return self
-
-    def close(self):
-        if sys.platform == "win32":
-            self._writer.close()
-            # close the streams and the pipe
-        else:
-            # add exception catch
-            self._socket.close()
-
-    def write(self, data: str):
-        # must include the carriage-return defined (as \r\n) for unix systems
-        request = f"""content-length: {len(data)}\r\ncontent-type: application/json\r\n\r\n{data}"""
-        if sys.platform == "win32":
-            # this should work
-            self._writer.write(request)
-            self._writer.flush()
-        else:
-            self._socket.send(request.encode("utf-8"))
-            # does this also need a flush on the socket?
-
-    def read(self, bufsize=1024):
-        """Read data from the socket.
-
-        Args:
-            bufsize (int): Number of bytes to read from the socket.
-
-        Returns:
-            data (bytes): Data received from the socket.
-        """
-        if sys.platform == "win32":
-            # this should work
-            return self._reader.read(bufsize)
-        else:
-            data = b""
-            while True:
-                part = self._socket.recv(bufsize)
-                data += part
-                if len(part) < bufsize:
-                    # No more data, or less than bufsize data received
-                    break
-            return data
-
-
-async def create_pipe(test_run_pipe: str) -> socket.socket:
-    __pipe = PipeManager(test_run_pipe)
-    return __pipe
-
-
 CONTENT_LENGTH: str = "Content-Length:"
 CONTENT_TYPE: str = "Content-Type:"
 
@@ -182,12 +105,7 @@ def _listen_on_pipe_new(listener, result: List[str], completed: threading.Event)
     Created as a separate function for clarity in threading context.
     """
     # Accept a connection. Note: For named pipes, the accept method might be different.
-    if os.name == "nt":
-        # windows design
-        print("listen on pipe new for windows")
-        # accept a connection
-        # set a timeout
-        # create a data array
+    if sys.platform == "win32":
         all_data: list = []
         stream = listener.wait()
         while True:

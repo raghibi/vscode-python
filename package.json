@@ -517,7 +517,8 @@
                             "pythonDiscoveryUsingWorkers",
                             "pythonTestAdapter",
                             "pythonREPLSmartSend",
-                            "pythonRecommendTensorboardExt"
+                            "pythonRecommendTensorboardExt",
+                            "pythonRunREPL"
                         ],
                         "enumDescriptions": [
                             "%python.experiments.All.description%",
@@ -527,7 +528,8 @@
                             "%python.experiments.pythonDiscoveryUsingWorkers.description%",
                             "%python.experiments.pythonTestAdapter.description%",
                             "%python.experiments.pythonREPLSmartSend.description%",
-                            "%python.experiments.pythonRecommendTensorboardExt.description%"
+                            "%python.experiments.pythonRecommendTensorboardExt.description%",
+                            "%python.experiments.pythonRunREPL.description%"
                         ]
                     },
                     "scope": "machine",
@@ -545,7 +547,8 @@
                             "pythonTerminalEnvVarActivation",
                             "pythonDiscoveryUsingWorkers",
                             "pythonTestAdapter",
-                            "pythonREPLSmartSend"
+                            "pythonREPLSmartSend",
+                            "pythonRunREPL"
                         ],
                         "enumDescriptions": [
                             "%python.experiments.All.description%",
@@ -554,7 +557,8 @@
                             "%python.experiments.pythonTerminalEnvVarActivation.description%",
                             "%python.experiments.pythonDiscoveryUsingWorkers.description%",
                             "%python.experiments.pythonTestAdapter.description%",
-                            "%python.experiments.pythonREPLSmartSend.description%"
+                            "%python.experiments.pythonREPLSmartSend.description%",
+                            "%python.experiments.pythonRunREPL.description%"
                         ]
                     },
                     "scope": "machine",

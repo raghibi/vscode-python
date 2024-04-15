@@ -1334,7 +1334,7 @@
                     "category": "Python",
                     "command": "python.execInREPL",
                     "title": "%python.command.python.execInREPL.title%",
-                    "when": "!virtualWorkspace && shellExecutionSupported && editorLangId == python"
+                    "when": "false"
                 },
                 {
                     "category": "Python",

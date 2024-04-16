@@ -1,8 +1,22 @@
-import { commands, Uri, workspace } from 'vscode';
+import {
+    commands,
+    NotebookController,
+    Uri,
+    workspace,
+    window,
+    NotebookControllerAffinity,
+    ViewColumn,
+    NotebookEdit,
+    NotebookCellData,
+    NotebookCellKind,
+    WorkspaceEdit,
+} from 'vscode';
 import { Disposable } from 'vscode-jsonrpc';
-import { Commands } from '../common/constants';
+import { Commands, PVSC_EXTENSION_ID } from '../common/constants';
 import { IInterpreterService } from '../interpreter/contracts';
 import { createReplController, startRepl } from './replController';
+
+let ourController: NotebookController | undefined;
 
 export function registerReplCommands(disposables: Disposable[], interpreterService: IInterpreterService): void {
     disposables.push(
@@ -11,7 +25,9 @@ export function registerReplCommands(disposables: Disposable[], interpreterServi
             if (interpreter) {
                 const interpreterPath = interpreter.path;
                 // How do we get instance of interactive window from Python extension?
-                const ourController = createReplController(interpreterPath);
+                if (!ourController) {
+                    ourController = createReplController(interpreterPath);
+                }
 
                 // How to go from user clicking Run Python --> Run selection/line via Python REPL -> IW opening
 
@@ -24,8 +40,77 @@ export function registerReplCommands(disposables: Disposable[], interpreterServi
                 // TODO: execute the cell
             }
             // workspace.onDidOpenNotebookDocument;
-            // await workspace.openNotebookDocument('interactive');
-            // await window.showNotebookDocument()
+            const ourResource = Uri.from({ scheme: 'untitled', path: 'repl.interactive' });
+            const notebookDocument = await workspace.openNotebookDocument(ourResource);
+
+            const notebookEditor = await window.showNotebookDocument(notebookDocument, {
+                viewColumn: ViewColumn.Beside,
+            });
+
+            ourController!.updateNotebookAffinity(notebookDocument, NotebookControllerAffinity.Default);
+            // await commands.executeCommand(
+            //     'interactive.open',
+            //     // Keep focus on the owning file if there is one
+            //     { viewColum: 1, preserveFocus: true },
+            //     ourResource,
+            //     ourController?.id,
+            //     'Python REPL',
+            // );
+
+            await commands.executeCommand('notebook.selectKernel', {
+                notebookEditor,
+                id: ourController?.id,
+                extension: PVSC_EXTENSION_ID,
+            });
+
+            const notebookCellData = new NotebookCellData(NotebookCellKind.Code, 'x=5', 'python');
+            // keep counter
+            const { cellCount } = notebookDocument;
+            const notebookEdit = NotebookEdit.insertCells(cellCount, [notebookCellData]);
+            const workspaceEdit = new WorkspaceEdit();
+            workspaceEdit.set(notebookDocument.uri, [notebookEdit]);
+            workspace.applyEdit(workspaceEdit);
+
+            const notebookCellExecution = ourController!.createNotebookCellExecution(
+                notebookDocument.cellAt(cellCount),
+            );
+            notebookCellExecution.start(Date.now());
+            // NEED TO TELL TO EXECUTE THE CELL WHICH WILL CALL MY HANDLER
+
+            // args: [
+            //     {
+            //         name: 'showOptions',
+            //         description: 'Show Options',
+            //         schema: {
+            //             type: 'object',
+            //             properties: {
+            //                 'viewColumn': {
+            //                     type: 'number',
+            //                     default: -1
+            //                 },
+            //                 'preserveFocus': {
+            //                     type: 'boolean',
+            //                     default: true
+            //                 }
+            //             },
+            //         }
+            //     },
+            //     {
+            //         name: 'resource',
+            //         description: 'Interactive resource Uri',
+            //         isOptional: true
+            //     },
+            //     {
+            //         name: 'controllerId',
+            //         description: 'Notebook controller Id',
+            //         isOptional: true
+            //     },
+            //     {
+            //         name: 'title',
+            //         description: 'Notebook editor title',
+            //         isOptional: true
+            //     }
+            // ]
         }),
     );
 }

@@ -56,17 +56,8 @@ def exec_user_input(request_id, user_input, user_globals):
         retval = callable(user_input, user_globals)
         if retval is not None:
             print(retval)
-    except Exception as e:
-        send_response(
-            {
-                "error": {
-                    "code": -32603,
-                    "message": str(e),
-                    "data": traceback.format_exc(),
-                },
-                "id": request_id,
-            }
-        )
+    except Exception:
+        print(traceback.format_exc())
     return user_globals
 
 

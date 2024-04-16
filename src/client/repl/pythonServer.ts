@@ -2,9 +2,10 @@ import * as path from 'path';
 import * as ch from 'child_process';
 import * as rpc from 'vscode-jsonrpc/node';
 import { Disposable } from 'vscode';
+import { EXTENSION_ROOT_DIR } from '../constants';
 
 // const SERVER_PATH = path.join(__dirname, '...', 'python_files', 'python_server.py');
-const SERVER_PATH = path.join(__dirname, '..', '..', 'pythonFiles', 'python_server.py');
+const SERVER_PATH = path.join(EXTENSION_ROOT_DIR, 'python_files', 'python_server.py');
 
 // const SERVER_PATH = path.join(__dirname, '..', '..', '..', 'pythonFiles', 'python_server.py');
 

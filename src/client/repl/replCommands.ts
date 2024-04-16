@@ -24,7 +24,7 @@ export function registerReplCommands(disposables: Disposable[], interpreterServi
                 // TODO: execute the cell
             }
             // workspace.onDidOpenNotebookDocument;
-            await workspace.openNotebookDocument('interactive');
+            // await workspace.openNotebookDocument('interactive');
             // await window.showNotebookDocument()
         }),
     );

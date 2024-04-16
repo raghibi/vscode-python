@@ -1,8 +1,8 @@
-import { commands, Uri } from 'vscode';
+import { commands, Uri, workspace } from 'vscode';
 import { Disposable } from 'vscode-jsonrpc';
 import { Commands } from '../common/constants';
 import { IInterpreterService } from '../interpreter/contracts';
-import { startRepl } from './replController';
+import { createReplController, startRepl } from './replController';
 
 export function registerReplCommands(disposables: Disposable[], interpreterService: IInterpreterService): void {
     disposables.push(
@@ -11,6 +11,8 @@ export function registerReplCommands(disposables: Disposable[], interpreterServi
             if (interpreter) {
                 const interpreterPath = interpreter.path;
                 // How do we get instance of interactive window from Python extension?
+                const ourController = createReplController(interpreterPath);
+
                 // How to go from user clicking Run Python --> Run selection/line via Python REPL -> IW opening
 
                 // TODO: Find interactive window, or open it
@@ -21,6 +23,9 @@ export function registerReplCommands(disposables: Disposable[], interpreterServi
 
                 // TODO: execute the cell
             }
+            // workspace.onDidOpenNotebookDocument;
+            await workspace.openNotebookDocument('interactive');
+            // await window.showNotebookDocument()
         }),
     );
 }

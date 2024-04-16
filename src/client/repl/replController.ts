@@ -6,7 +6,7 @@ export function createReplController(interpreterPath: string): vscode.NotebookCo
     const controller = vscode.notebooks.createNotebookController('pythonREPL', 'interactive', 'Python REPL');
     controller.supportedLanguages = ['python'];
     controller.supportsExecutionOrder = true;
-    controller.description = 'GitHub';
+    controller.description = 'Python REPL';
 
     controller.executeHandler = async (cells) => {
         for (const cell of cells) {

@@ -3,7 +3,10 @@ import * as ch from 'child_process';
 import * as rpc from 'vscode-jsonrpc/node';
 import { Disposable } from 'vscode';
 
-const SERVER_PATH = path.join(__dirname, '...', 'python_files', 'python_server.py');
+// const SERVER_PATH = path.join(__dirname, '...', 'python_files', 'python_server.py');
+const SERVER_PATH = path.join(__dirname, '..', '..', 'pythonFiles', 'python_server.py');
+
+// const SERVER_PATH = path.join(__dirname, '..', '..', '..', 'pythonFiles', 'python_server.py');
 
 export interface PythonServer extends Disposable {
     execute(code: string): Promise<string>;

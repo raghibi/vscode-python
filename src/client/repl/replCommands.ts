@@ -10,11 +10,16 @@ import {
     NotebookCellData,
     NotebookCellKind,
     WorkspaceEdit,
+    NotebookEditor,
+    Range,
+    TextEditor,
+    Position,
 } from 'vscode';
 import { Disposable } from 'vscode-jsonrpc';
 import { Commands, PVSC_EXTENSION_ID } from '../common/constants';
 import { IInterpreterService } from '../interpreter/contracts';
-import { createReplController, startRepl } from './replController';
+import { getMultiLineSelectionText, getSingleLineSelectionText } from '../terminals/codeExecution/helper';
+import { createReplController } from './replController';
 
 let ourController: NotebookController | undefined;
 let ourNotebookEditor: NotebookEditor | undefined;
@@ -28,7 +33,26 @@ let ourNotebookEditor: NotebookEditor | undefined;
 
 // figure out way to put markdown telling user kernel has been dead and need to pick again.
 
-export function registerReplCommands(disposables: Disposable[], interpreterService: IInterpreterService): void {
+async function getSelectedTextToExecute(textEditor: TextEditor): Promise<string | undefined> {
+    if (!textEditor) {
+        return undefined;
+    }
+
+    const { selection } = textEditor;
+    let code: string;
+
+    if (selection.isEmpty) {
+        code = textEditor.document.lineAt(selection.start.line).text;
+    } else if (selection.isSingleLine) {
+        code = getSingleLineSelectionText(textEditor);
+    } else {
+        code = getMultiLineSelectionText(textEditor);
+    }
+
+    return code;
+}
+
+export async function registerReplCommands(disposables: Disposable[], interpreterService: IInterpreterService): void {
     disposables.push(
         commands.registerCommand(Commands.Exec_In_REPL, async (uri: Uri) => {
             const interpreter = await interpreterService.getActiveInterpreter(uri);
@@ -38,30 +62,21 @@ export function registerReplCommands(disposables: Disposable[], interpreterServi
                 if (!ourController) {
                     ourController = createReplController(interpreterPath);
                 }
+                const activeEditor = window.activeTextEditor as TextEditor;
 
-                // How to go from user clicking Run Python --> Run selection/line via Python REPL -> IW opening
-
-                // TODO: Find interactive window, or open it
-
-                // TODO: Add new cell to interactive window document
-
-                // TODO: Set REPL server on interactive window. Make sure REPL server is running
-
-                // TODO: execute the cell
+                const code = await getSelectedTextToExecute(activeEditor);
             }
-            // workspace.onDidOpenNotebookDocument;
-            const ourResource = Uri.from({ scheme: 'untitled', path: 'repl.interactive' });
-            const notebookDocument = await workspace.openNotebookDocument(ourResource);
 
+            const ourResource = Uri.from({ scheme: 'untitled', path: 'repl.interactive' });
+            // How to go from user clicking Run Python --> Run selection/line via Python REPL -> IW opening
+            const notebookDocument = await workspace.openNotebookDocument(ourResource);
             // We want to keep notebookEditor, whenever we want to run.
+            // Find interactive window, or open it.
             if (!ourNotebookEditor) {
                 ourNotebookEditor = await window.showNotebookDocument(notebookDocument, {
                     viewColumn: ViewColumn.Beside,
                 });
             }
-            // ourNotebookEditor = await window.showNotebookDocument(notebookDocument, {
-            //     viewColumn: ViewColumn.Beside,
-            // });
 
             ourController!.updateNotebookAffinity(notebookDocument, NotebookControllerAffinity.Default);
             // await commands.executeCommand(
@@ -73,14 +88,15 @@ export function registerReplCommands(disposables: Disposable[], interpreterServi
             //     'Python REPL',
             // );
 
+            // Auto-Select Python REPL Kernel
             await commands.executeCommand('notebook.selectKernel', {
                 ourNotebookEditor,
                 id: ourController?.id,
                 extension: PVSC_EXTENSION_ID,
             });
 
-            const notebookCellData = new NotebookCellData(NotebookCellKind.Code, 'x=5', 'python');
-            // keep counter
+            // Add new cell to interactive window document
+            const notebookCellData = new NotebookCellData(NotebookCellKind.Code, 'x=5', 'python'); // this is manual atm but need to pass in user input here
             const { cellCount } = notebookDocument;
             const notebookEdit = NotebookEdit.insertCells(cellCount, [notebookCellData]);
             const workspaceEdit = new WorkspaceEdit();
@@ -93,6 +109,7 @@ export function registerReplCommands(disposables: Disposable[], interpreterServi
             // notebookCellExecution.start(Date.now());
             // notebookCellExecution.end(true);
 
+            // Execute the cell
             commands.executeCommand('notebook.cell.execute', {
                 ranges: [{ start: cellCount, end: cellCount + 1 }],
                 document: ourResource,

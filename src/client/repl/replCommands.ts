@@ -11,9 +11,7 @@ import {
     NotebookCellKind,
     WorkspaceEdit,
     NotebookEditor,
-    Range,
     TextEditor,
-    Position,
 } from 'vscode';
 import { Disposable } from 'vscode-jsonrpc';
 import { Commands, PVSC_EXTENSION_ID } from '../common/constants';
@@ -24,14 +22,16 @@ import { createReplController } from './replController';
 let ourController: NotebookController | undefined;
 let ourNotebookEditor: NotebookEditor | undefined;
 
+// TODO: Need to figure out making separate REPL for each file:
 // a.py in REPL.
 // b.py run in REPL
-// Uri to notebookEditor if we want separate REPL for each file.
+// MAPPING Uri to notebookEditor if we want separate REPL for each file.
+// Currently: Everything gets sent into one single REPL.
 
-// when you reload window, in REPL editor is it restored...
-// cache binding uri to python..5
+// TODO: when you reload window, is the REPL still binded to same Python file?
+// cache binding uri to to REPL instance or notebookEditor.
 
-// figure out way to put markdown telling user kernel has been dead and need to pick again.
+// TODO: figure out way to put markdown telling user kernel has been dead and need to pick again.
 
 async function getSelectedTextToExecute(textEditor: TextEditor): Promise<string | undefined> {
     if (!textEditor) {
@@ -52,7 +52,10 @@ async function getSelectedTextToExecute(textEditor: TextEditor): Promise<string 
     return code;
 }
 
-export async function registerReplCommands(disposables: Disposable[], interpreterService: IInterpreterService): void {
+export async function registerReplCommands(
+    disposables: Disposable[],
+    interpreterService: IInterpreterService,
+): Promise<void> {
     disposables.push(
         commands.registerCommand(Commands.Exec_In_REPL, async (uri: Uri) => {
             const interpreter = await interpreterService.getActiveInterpreter(uri);
@@ -68,6 +71,7 @@ export async function registerReplCommands(disposables: Disposable[], interprete
                 const ourResource = Uri.from({ scheme: 'untitled', path: 'repl.interactive' });
                 // How to go from user clicking Run Python --> Run selection/line via Python REPL -> IW opening
                 const notebookDocument = await workspace.openNotebookDocument(ourResource);
+
                 // We want to keep notebookEditor, whenever we want to run.
                 // Find interactive window, or open it.
                 if (!ourNotebookEditor) {
@@ -77,14 +81,6 @@ export async function registerReplCommands(disposables: Disposable[], interprete
                 }
 
                 ourController!.updateNotebookAffinity(notebookDocument, NotebookControllerAffinity.Default);
-                // await commands.executeCommand(
-                //     'interactive.open',
-                //     // Keep focus on the owning file if there is one
-                //     { viewColum: 1, preserveFocus: true },
-                //     ourResource,
-                //     ourController?.id,
-                //     'Python REPL',
-                // );
 
                 // Auto-Select Python REPL Kernel
                 await commands.executeCommand('notebook.selectKernel', {
@@ -93,74 +89,20 @@ export async function registerReplCommands(disposables: Disposable[], interprete
                     extension: PVSC_EXTENSION_ID,
                 });
 
-                // Add new cell to interactive window document
-                const notebookCellData = new NotebookCellData(NotebookCellKind.Code, code as string, 'python'); // this is manual atm but need to pass in user input here
+                const notebookCellData = new NotebookCellData(NotebookCellKind.Code, code as string, 'python');
                 const { cellCount } = notebookDocument;
+                // Add new cell to interactive window document
                 const notebookEdit = NotebookEdit.insertCells(cellCount, [notebookCellData]);
                 const workspaceEdit = new WorkspaceEdit();
                 workspaceEdit.set(notebookDocument.uri, [notebookEdit]);
                 workspace.applyEdit(workspaceEdit);
-
-                // const notebookCellExecution = ourController!.createNotebookCellExecution(
-                //     notebookDocument.cellAt(cellCount),
-                // );
-                // notebookCellExecution.start(Date.now());
-                // notebookCellExecution.end(true);
 
                 // Execute the cell
                 commands.executeCommand('notebook.cell.execute', {
                     ranges: [{ start: cellCount, end: cellCount + 1 }],
                     document: ourResource,
                 });
-
-                // event fire our executeHandler we made for notebook controller
-
-                // NEED TO TELL TO EXECUTE THE CELL WHICH WILL CALL MY HANDLER
-
-                // args: [
-                //     {
-                //         name: 'showOptions',
-                //         description: 'Show Options',
-                //         schema: {
-                //             type: 'object',
-                //             properties: {
-                //                 'viewColumn': {
-                //                     type: 'number',
-                //                     default: -1
-                //                 },
-                //                 'preserveFocus': {
-                //                     type: 'boolean',
-                //                     default: true
-                //                 }
-                //             },
-                //         }
-                //     },
-                //     {
-                //         name: 'resource',
-                //         description: 'Interactive resource Uri',
-                //         isOptional: true
-                //     },
-                //     {
-                //         name: 'controllerId',
-                //         description: 'Notebook controller Id',
-                //         isOptional: true
-                //     },
-                //     {
-                //         name: 'title',
-                //         description: 'Notebook editor title',
-                //         isOptional: true
-                //     }
-                // ]
             }
         }),
     );
 }
-
-// debugger
-// read code, use tools like hover, doc
-// think through
-
-// ask questions
-// write down what you know
-// write down what you don't know
-// write down what you think you know

@@ -19,8 +19,8 @@ import { IInterpreterService } from '../interpreter/contracts';
 import { getMultiLineSelectionText, getSingleLineSelectionText } from '../terminals/codeExecution/helper';
 import { createReplController } from './replController';
 
-let ourController: NotebookController | undefined;
-let ourNotebookEditor: NotebookEditor | undefined;
+let notebookController: NotebookController | undefined;
+let notebookEditor: NotebookEditor | undefined;
 
 // TODO: Need to figure out making separate REPL for each file:
 // a.py in REPL.
@@ -62,8 +62,8 @@ export async function registerReplCommands(
             if (interpreter) {
                 const interpreterPath = interpreter.path;
                 // How do we get instance of interactive window from Python extension?
-                if (!ourController) {
-                    ourController = createReplController(interpreterPath);
+                if (!notebookController) {
+                    notebookController = createReplController(interpreterPath);
                 }
                 const activeEditor = window.activeTextEditor as TextEditor;
 
@@ -74,18 +74,18 @@ export async function registerReplCommands(
 
                 // We want to keep notebookEditor, whenever we want to run.
                 // Find interactive window, or open it.
-                if (!ourNotebookEditor) {
-                    ourNotebookEditor = await window.showNotebookDocument(notebookDocument, {
+                if (!notebookEditor) {
+                    notebookEditor = await window.showNotebookDocument(notebookDocument, {
                         viewColumn: ViewColumn.Beside,
                     });
                 }
 
-                ourController!.updateNotebookAffinity(notebookDocument, NotebookControllerAffinity.Default);
+                notebookController!.updateNotebookAffinity(notebookDocument, NotebookControllerAffinity.Default);
 
                 // Auto-Select Python REPL Kernel
                 await commands.executeCommand('notebook.selectKernel', {
-                    ourNotebookEditor,
-                    id: ourController?.id,
+                    notebookEditor,
+                    id: notebookController?.id,
                     extension: PVSC_EXTENSION_ID,
                 });
 

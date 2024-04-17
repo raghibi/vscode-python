@@ -65,94 +65,93 @@ export async function registerReplCommands(disposables: Disposable[], interprete
                 const activeEditor = window.activeTextEditor as TextEditor;
 
                 const code = await getSelectedTextToExecute(activeEditor);
-            }
+                const ourResource = Uri.from({ scheme: 'untitled', path: 'repl.interactive' });
+                // How to go from user clicking Run Python --> Run selection/line via Python REPL -> IW opening
+                const notebookDocument = await workspace.openNotebookDocument(ourResource);
+                // We want to keep notebookEditor, whenever we want to run.
+                // Find interactive window, or open it.
+                if (!ourNotebookEditor) {
+                    ourNotebookEditor = await window.showNotebookDocument(notebookDocument, {
+                        viewColumn: ViewColumn.Beside,
+                    });
+                }
 
-            const ourResource = Uri.from({ scheme: 'untitled', path: 'repl.interactive' });
-            // How to go from user clicking Run Python --> Run selection/line via Python REPL -> IW opening
-            const notebookDocument = await workspace.openNotebookDocument(ourResource);
-            // We want to keep notebookEditor, whenever we want to run.
-            // Find interactive window, or open it.
-            if (!ourNotebookEditor) {
-                ourNotebookEditor = await window.showNotebookDocument(notebookDocument, {
-                    viewColumn: ViewColumn.Beside,
+                ourController!.updateNotebookAffinity(notebookDocument, NotebookControllerAffinity.Default);
+                // await commands.executeCommand(
+                //     'interactive.open',
+                //     // Keep focus on the owning file if there is one
+                //     { viewColum: 1, preserveFocus: true },
+                //     ourResource,
+                //     ourController?.id,
+                //     'Python REPL',
+                // );
+
+                // Auto-Select Python REPL Kernel
+                await commands.executeCommand('notebook.selectKernel', {
+                    ourNotebookEditor,
+                    id: ourController?.id,
+                    extension: PVSC_EXTENSION_ID,
                 });
+
+                // Add new cell to interactive window document
+                const notebookCellData = new NotebookCellData(NotebookCellKind.Code, code as string, 'python'); // this is manual atm but need to pass in user input here
+                const { cellCount } = notebookDocument;
+                const notebookEdit = NotebookEdit.insertCells(cellCount, [notebookCellData]);
+                const workspaceEdit = new WorkspaceEdit();
+                workspaceEdit.set(notebookDocument.uri, [notebookEdit]);
+                workspace.applyEdit(workspaceEdit);
+
+                // const notebookCellExecution = ourController!.createNotebookCellExecution(
+                //     notebookDocument.cellAt(cellCount),
+                // );
+                // notebookCellExecution.start(Date.now());
+                // notebookCellExecution.end(true);
+
+                // Execute the cell
+                commands.executeCommand('notebook.cell.execute', {
+                    ranges: [{ start: cellCount, end: cellCount + 1 }],
+                    document: ourResource,
+                });
+
+                // event fire our executeHandler we made for notebook controller
+
+                // NEED TO TELL TO EXECUTE THE CELL WHICH WILL CALL MY HANDLER
+
+                // args: [
+                //     {
+                //         name: 'showOptions',
+                //         description: 'Show Options',
+                //         schema: {
+                //             type: 'object',
+                //             properties: {
+                //                 'viewColumn': {
+                //                     type: 'number',
+                //                     default: -1
+                //                 },
+                //                 'preserveFocus': {
+                //                     type: 'boolean',
+                //                     default: true
+                //                 }
+                //             },
+                //         }
+                //     },
+                //     {
+                //         name: 'resource',
+                //         description: 'Interactive resource Uri',
+                //         isOptional: true
+                //     },
+                //     {
+                //         name: 'controllerId',
+                //         description: 'Notebook controller Id',
+                //         isOptional: true
+                //     },
+                //     {
+                //         name: 'title',
+                //         description: 'Notebook editor title',
+                //         isOptional: true
+                //     }
+                // ]
             }
-
-            ourController!.updateNotebookAffinity(notebookDocument, NotebookControllerAffinity.Default);
-            // await commands.executeCommand(
-            //     'interactive.open',
-            //     // Keep focus on the owning file if there is one
-            //     { viewColum: 1, preserveFocus: true },
-            //     ourResource,
-            //     ourController?.id,
-            //     'Python REPL',
-            // );
-
-            // Auto-Select Python REPL Kernel
-            await commands.executeCommand('notebook.selectKernel', {
-                ourNotebookEditor,
-                id: ourController?.id,
-                extension: PVSC_EXTENSION_ID,
-            });
-
-            // Add new cell to interactive window document
-            const notebookCellData = new NotebookCellData(NotebookCellKind.Code, 'x=5', 'python'); // this is manual atm but need to pass in user input here
-            const { cellCount } = notebookDocument;
-            const notebookEdit = NotebookEdit.insertCells(cellCount, [notebookCellData]);
-            const workspaceEdit = new WorkspaceEdit();
-            workspaceEdit.set(notebookDocument.uri, [notebookEdit]);
-            workspace.applyEdit(workspaceEdit);
-
-            // const notebookCellExecution = ourController!.createNotebookCellExecution(
-            //     notebookDocument.cellAt(cellCount),
-            // );
-            // notebookCellExecution.start(Date.now());
-            // notebookCellExecution.end(true);
-
-            // Execute the cell
-            commands.executeCommand('notebook.cell.execute', {
-                ranges: [{ start: cellCount, end: cellCount + 1 }],
-                document: ourResource,
-            });
-
-            // event fire our executeHandler we made for notebook controller
-
-            // NEED TO TELL TO EXECUTE THE CELL WHICH WILL CALL MY HANDLER
-
-            // args: [
-            //     {
-            //         name: 'showOptions',
-            //         description: 'Show Options',
-            //         schema: {
-            //             type: 'object',
-            //             properties: {
-            //                 'viewColumn': {
-            //                     type: 'number',
-            //                     default: -1
-            //                 },
-            //                 'preserveFocus': {
-            //                     type: 'boolean',
-            //                     default: true
-            //                 }
-            //             },
-            //         }
-            //     },
-            //     {
-            //         name: 'resource',
-            //         description: 'Interactive resource Uri',
-            //         isOptional: true
-            //     },
-            //     {
-            //         name: 'controllerId',
-            //         description: 'Notebook controller Id',
-            //         isOptional: true
-            //     },
-            //     {
-            //         name: 'title',
-            //         description: 'Notebook editor title',
-            //         isOptional: true
-            //     }
-            // ]
         }),
     );
 }

@@ -1,26 +1,20 @@
 import {
-    commands,
-    NotebookController,
-    Uri,
-    workspace,
-    window,
-    NotebookControllerAffinity,
-    ViewColumn,
-    NotebookEdit,
-    NotebookCellData,
-    NotebookCellKind,
-    WorkspaceEdit,
-    NotebookEditor,
+    EventEmitter,
     TextEditor,
+    Uri,
+    commands,
+    window,
+    type Pseudoterminal,
+    type Terminal
 } from 'vscode';
 import { Disposable } from 'vscode-jsonrpc';
-import { Commands, PVSC_EXTENSION_ID } from '../common/constants';
+import { Commands } from '../common/constants';
 import { IInterpreterService } from '../interpreter/contracts';
 import { getMultiLineSelectionText, getSingleLineSelectionText } from '../terminals/codeExecution/helper';
-import { createReplController } from './replController';
+import { createPythonServer, type PythonServer } from './pythonServer';
 
-let notebookController: NotebookController | undefined;
-let notebookEditor: NotebookEditor | undefined;
+// let notebookController: NotebookController | undefined;
+// let notebookEditor: NotebookEditor | undefined;
 
 // TODO: Need to figure out making separate REPL for each file:
 // a.py in REPL.
@@ -52,6 +46,12 @@ async function getSelectedTextToExecute(textEditor: TextEditor): Promise<string 
     return code;
 }
 
+let server: PythonServer;
+let terminal: Terminal;
+let pty: Pseudoterminal;
+const writeEmitter = new EventEmitter<string>();
+const closeEmitter = new EventEmitter<number | undefined>();
+
 export async function registerReplCommands(
     disposables: Disposable[],
     interpreterService: IInterpreterService,
@@ -61,48 +61,47 @@ export async function registerReplCommands(
             const interpreter = await interpreterService.getActiveInterpreter(uri);
             if (interpreter) {
                 const interpreterPath = interpreter.path;
-                // How do we get instance of interactive window from Python extension?
-                if (!notebookController) {
-                    notebookController = createReplController(interpreterPath);
+                if (!server) {
+                    server = createPythonServer([interpreterPath]);
                 }
+
                 const activeEditor = window.activeTextEditor as TextEditor;
+                const code = await getSelectedTextToExecute(activeEditor) ?? '';
 
-                const code = await getSelectedTextToExecute(activeEditor);
-                const ourResource = Uri.from({ scheme: 'untitled', path: 'repl.interactive' });
-                // How to go from user clicking Run Python --> Run selection/line via Python REPL -> IW opening
-                const notebookDocument = await workspace.openNotebookDocument(ourResource);
-
-                // We want to keep notebookEditor, whenever we want to run.
-                // Find interactive window, or open it.
-                if (!notebookEditor) {
-                    notebookEditor = await window.showNotebookDocument(notebookDocument, {
-                        viewColumn: ViewColumn.Beside,
-                    });
-                }
-
-                notebookController!.updateNotebookAffinity(notebookDocument, NotebookControllerAffinity.Default);
-
-                // Auto-Select Python REPL Kernel
-                await commands.executeCommand('notebook.selectKernel', {
-                    notebookEditor,
-                    id: notebookController?.id,
-                    extension: PVSC_EXTENSION_ID,
+                await new Promise<void>((resolve) => {
+                    if (terminal) {
+                        resolve();
+                        return;
+                    }
+                    pty = {
+                        onDidWrite: writeEmitter.event,
+                        onDidClose: closeEmitter.event,
+                        open: () => {
+                            writeEmitter.fire(prompt());
+                            resolve()
+                        },
+                        close: () => console.log('close'),
+                        handleInput(_data) {
+                            // TODO: Impl execution of input
+                        },
+                    };
+                    terminal = window.createTerminal({ name: 'Python REPL', pty });
                 });
+                terminal.show();
 
-                const notebookCellData = new NotebookCellData(NotebookCellKind.Code, code as string, 'python');
-                const { cellCount } = notebookDocument;
-                // Add new cell to interactive window document
-                const notebookEdit = NotebookEdit.insertCells(cellCount, [notebookCellData]);
-                const workspaceEdit = new WorkspaceEdit();
-                workspaceEdit.set(notebookDocument.uri, [notebookEdit]);
-                workspace.applyEdit(workspaceEdit);
-
-                // Execute the cell
-                commands.executeCommand('notebook.cell.execute', {
-                    ranges: [{ start: cellCount, end: cellCount + 1 }],
-                    document: ourResource,
-                });
+                writeEmitter.fire(`${code}\r\n${vsc('E', code)}${vsc('C')}`);
+                const result = await server.execute(code);
+                writeEmitter.fire(`${result}\r\n${vsc('D', 0)}`);
+                writeEmitter.fire(prompt());
             }
         }),
     );
+}
+
+function prompt(): string {
+    return `${vsc('A')}>>> ${vsc('B')}`;
+}
+
+function vsc(...params: (string | number)[]): string {
+    return `\x1b]633;${params.join(';')}\x07`;
 }

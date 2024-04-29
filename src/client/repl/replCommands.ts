@@ -81,7 +81,7 @@ export async function registerReplCommands(
                             resolve()
                         },
                         close: () => console.log('close'),
-                        handleInput(_data) {
+                        handleInput(data) {
                             // TODO: Impl execution of input
 
                             // Trigger intellisense with fake results
@@ -98,7 +98,7 @@ export async function registerReplCommands(
                                 { CompletionText: 'PendingDeprecationWarning', ListItemText: 'PendingDeprecationWarning', ResultType: 3, ToolTip: 'PendingDeprecationWarning' },
                                 { CompletionText: 'UnicodeDecodeError', ListItemText: 'UnicodeDecodeError', ResultType: 3, ToolTip: 'UnicodeDecodeError' },
                             ];
-                            writeEmitter.fire(`d${vsc('Completions', 0, 1, 1, JSON.stringify(completions))}`)
+                            writeEmitter.fire(`${data}${vsc('Completions', 0, 1, 1, JSON.stringify(completions))}`)
                         },
                     };
                     terminal = window.createTerminal({ name: 'Python REPL', pty });

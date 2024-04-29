@@ -83,6 +83,22 @@ export async function registerReplCommands(
                         close: () => console.log('close'),
                         handleInput(_data) {
                             // TODO: Impl execution of input
+
+                            // Trigger intellisense with fake results
+                            const completions = [
+                                { CompletionText: 'def', ListItemText: 'def', ResultType: 3, ToolTip: 'def' },
+                                { CompletionText: 'del', ListItemText: 'del', ResultType: 3, ToolTip: 'del' },
+                                { CompletionText: 'delattr', ListItemText: 'delattr', ResultType: 3, ToolTip: 'delattr' },
+                                { CompletionText: 'dir', ListItemText: 'dir', ResultType: 6, ToolTip: 'dir' },
+                                { CompletionText: 'divmod', ListItemText: 'divmod', ResultType: 6, ToolTip: 'divmod' },
+                                { CompletionText: 'DeprecationWarning', ListItemText: 'DeprecationWarning', ResultType: 6, ToolTip: 'DeprecationWarning' },
+                                { CompletionText: '__dict__', ListItemText: '__dict__', ResultType: 9, ToolTip: '__dict__' },
+                                { CompletionText: '__doc__', ListItemText: '__doc__', ResultType: 9, ToolTip: '__doc__' },
+                                { CompletionText: 'ZeroDivisionError', ListItemText: 'ZeroDivisionError', ResultType: 3, ToolTip: 'ZeroDivisionError' },
+                                { CompletionText: 'PendingDeprecationWarning', ListItemText: 'PendingDeprecationWarning', ResultType: 3, ToolTip: 'PendingDeprecationWarning' },
+                                { CompletionText: 'UnicodeDecodeError', ListItemText: 'UnicodeDecodeError', ResultType: 3, ToolTip: 'UnicodeDecodeError' },
+                            ];
+                            writeEmitter.fire(`d${vsc('Completions', 0, 1, 1, JSON.stringify(completions))}`)
                         },
                     };
                     terminal = window.createTerminal({ name: 'Python REPL', pty });

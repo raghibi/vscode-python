@@ -3,6 +3,8 @@
 
 use std::time::SystemTime;
 
+use crate::logging::LogMessage;
+
 mod common_python;
 mod conda;
 mod known;
@@ -15,15 +17,34 @@ fn main() {
     let now = SystemTime::now();
     logging::log_info("Starting Native Locator");
 
+    struct JsonRPCDispatcher {}
+    impl messaging::MessageDispatcher for JsonRPCDispatcher {
+        fn send_message<T: serde::Serialize>(&self, message: T) -> () {
+            let message = serde_json::to_string(&message).unwrap();
+            print!(
+                "Content-Length: {}\r\nContent-Type: application/vscode-jsonrpc; charset=utf-8\r\n\r\n{}",
+                message.len(),
+                message
+            );
+        }
+        fn log_debug(&self, message: &str) -> () {
+            self.send_message(LogMessage::new(
+                message.to_string(),
+                logging::LogLevel::Debug,
+            ));
+        }
+    }
+    let dispatcher = JsonRPCDispatcher {};
+
     // Finds python on PATH
-    common_python::find_and_report();
+    common_python::find_and_report(&dispatcher);
 
     // Finds conda binary and conda environments
-    conda::find_and_report();
+    conda::find_and_report(&dispatcher);
 
     // Finds Windows Store, Known Path, and Registry pythons
     #[cfg(windows)]
-    windows_python::find_and_report();
+    windows_python::find_and_report(&dispatcher);
 
     match now.elapsed() {
         Ok(elapsed) => {

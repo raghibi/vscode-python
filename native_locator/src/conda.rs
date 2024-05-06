@@ -367,14 +367,14 @@ fn get_distinct_conda_envs(conda_bin: PathBuf) -> Vec<CondaEnv> {
     conda_envs
 }
 
-pub fn find_and_report() {
+pub fn find_and_report(dispatcher: &impl messaging::MessageDispatcher) {
     let conda_binary = find_conda_binary();
     match conda_binary {
         Some(conda_binary) => {
             let params =
                 messaging::EnvManager::new(vec![conda_binary.to_string_lossy().to_string()], None);
             let message = messaging::EnvManagerMessage::new(params);
-            messaging::send_message(message);
+            dispatcher.send_message(message);
 
             let envs = get_distinct_conda_envs(conda_binary.to_path_buf());
             for env in envs {
@@ -407,7 +407,7 @@ pub fn find_and_report() {
                     Some(env.path.to_string_lossy().to_string()),
                 );
                 let message = messaging::PythonEnvironmentMessage::new(params);
-                messaging::send_message(message);
+                dispatcher.send_message(message);
             }
         }
         None => (),

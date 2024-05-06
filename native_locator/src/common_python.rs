@@ -20,10 +20,10 @@ fn get_env_path(path: &str) -> Option<String> {
     }
 }
 
-fn report_path_python(path: &str) {
+fn report_path_python(dispatcher: &impl messaging::MessageDispatcher, path: &str) {
     let version = utils::get_version(path);
     let env_path = get_env_path(path);
-    messaging::send_message(messaging::PythonEnvironment::new(
+    dispatcher.send_message(messaging::PythonEnvironment::new(
         "Python".to_string(),
         vec![path.to_string()],
         "System".to_string(),
@@ -33,7 +33,7 @@ fn report_path_python(path: &str) {
     ));
 }
 
-fn report_python_on_path() {
+fn report_python_on_path(dispatcher: &impl messaging::MessageDispatcher) {
     let bin = if cfg!(windows) {
         "python.exe"
     } else {
@@ -43,10 +43,10 @@ fn report_python_on_path() {
         env::split_paths(&paths)
             .map(|p| p.join(bin))
             .filter(|p| p.exists())
-            .for_each(|full_path| report_path_python(full_path.to_str().unwrap()));
+            .for_each(|full_path| report_path_python(dispatcher, full_path.to_str().unwrap()));
     }
 }
 
-pub fn find_and_report() {
-    report_python_on_path();
+pub fn find_and_report(dispatcher: &impl messaging::MessageDispatcher) {
+    report_python_on_path(dispatcher);
 }

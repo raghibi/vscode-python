@@ -3,6 +3,14 @@
 
 use serde::{Deserialize, Serialize};
 
+pub trait MessageDispatcher {
+    fn send_message<T: serde::Serialize>(&self, message: T) -> ();
+    fn log_debug(&self, message: &str) -> ();
+    fn log_info(&self, message: &str) -> ();
+    fn log_warning(&self, message: &str) -> ();
+    fn log_error(&self, message: &str) -> ();
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvManager {

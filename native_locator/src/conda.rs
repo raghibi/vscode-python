@@ -367,8 +367,11 @@ fn get_distinct_conda_envs(conda_bin: PathBuf) -> Vec<CondaEnv> {
     conda_envs
 }
 
-pub fn find_and_report() {
-    let conda_binary = find_conda_binary();
+pub fn find_and_report(conda_exe: Option<PathBuf>) {
+    let conda_binary = match conda_exe {
+        Some(_) => conda_exe,
+        None => find_conda_binary(),
+    };
     match conda_binary {
         Some(conda_binary) => {
             let params =

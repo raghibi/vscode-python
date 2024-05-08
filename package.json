@@ -362,6 +362,11 @@
         ],
         "configuration": {
             "properties": {
+                "python.multiLineReplInput": {
+                    "default": "true",
+                    "description": "%python.multiLineReplInput.description%",
+                    "type": "boolean"
+                },
                 "python.activeStateToolPath": {
                     "default": "state",
                     "description": "%python.activeStateToolPath.description%",
@@ -1093,6 +1098,16 @@
                 "key": "ctrl+r",
                 "mac": "cmd+r",
                 "when": "python.hasActiveTensorBoardSession"
+            },
+            {
+                "command": "interactive.execute",
+                "key": "shift+enter",
+                "when": "activeEditor == 'workbench.editor.interactive' && notebookKernel =~ /^ms-python.python\\// && config.python.multiLineReplInput"
+            },
+            {
+                "command": "interactive.execute",
+                "key": "enter",
+                "when": "activeEditor == 'workbench.editor.interactive' && notebookKernel =~ /^ms-python.python\\// && !config.python.multiLineReplInput"
             }
         ],
         "languages": [
@@ -1156,10 +1171,10 @@
         ],
         "menus": {
             "issue/reporter": [
-				{
-					"command": "python.reportIssue"
-				}
-			],
+                {
+                    "command": "python.reportIssue"
+                }
+            ],
             "commandPalette": [
                 {
                     "category": "Python",

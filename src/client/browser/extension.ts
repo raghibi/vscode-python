@@ -24,6 +24,10 @@ let pylanceApi: PylanceApi | undefined;
 export function activate(context: vscode.ExtensionContext): Promise<IBrowserExtensionApi> {
     const reporter = getTelemetryReporter();
 
+    context.subscriptions.push(
+        vscode.commands.registerCommand('python.reportIssue', () => ReportIssueCommandHandler.openReportIssue()),
+    );
+
     const activationPromise = Promise.resolve(buildApi(reporter));
     const pylanceExtension = vscode.extensions.getExtension<PylanceApi>(PYLANCE_EXTENSION_ID);
     if (pylanceExtension) {
@@ -114,7 +118,6 @@ async function runPylance(
 
         context.subscriptions.push(
             vscode.commands.registerCommand('python.viewLanguageServerOutput', () => client.outputChannel.show()),
-            vscode.commands.registerCommand('python.reportIssue', () => ReportIssueCommandHandler.openReportIssue()),
         );
 
         client.onTelemetry(

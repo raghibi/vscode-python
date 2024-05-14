@@ -12,6 +12,7 @@ import { EventName } from '../telemetry/constants';
 import { createStatusItem } from './intellisenseStatus';
 import { PylanceApi } from '../activation/node/pylanceApi';
 import { buildApi, IBrowserExtensionApi } from './api';
+import { ReportIssueCommandHandler } from '../common/application/commands/reportIssueCommand';
 
 interface BrowserConfig {
     distUrl: string; // URL to Pylance's dist folder.
@@ -113,6 +114,7 @@ async function runPylance(
 
         context.subscriptions.push(
             vscode.commands.registerCommand('python.viewLanguageServerOutput', () => client.outputChannel.show()),
+            vscode.commands.registerCommand('python.reportIssue', () => ReportIssueCommandHandler.openReportIssue()),
         );
 
         client.onTelemetry(

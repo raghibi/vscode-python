@@ -192,7 +192,7 @@
                         ]
                     },
                     {
-                        "id": "python.openInteractiveWindow",
+                        "id": "python.openWindow",
                         "title": "%walkthrough.step.python.openInteractiveWindow.title%",
                         "description": "%walkthrough.step.python.openInteractiveWindow.description%",
                         "media": {
@@ -1113,12 +1113,12 @@
             {
                 "command": "python.execSelectionInTerminal",
                 "key": "shift+enter",
-                "when": "!config.python.REPL.sendToNativeREPL && editorTextFocus && editorLangId == python && !findInputFocussed && !replaceInputFocussed && !jupyter.ownsSelection && !notebookEditorFocused && activeEditor != 'workbench.editor.interactive'"
+                "when": "activeEditor == 'workbench.editors.textResourceEditor' && editorTextFocus && !config.python.REPL.sendToNativeREPL && editorLangId == 'python' && !jupyter.ownsSelection"
             },
             {
                 "command": "python.execInREPL",
                 "key": "shift+enter",
-                "when": "config.python.REPL.sendToNativeREPL && activeEditor != 'workbench.editor.interactive'&& editorLangId == python && editorTextFocus && !jupyter.ownsSelection"
+                "when": "activeEditor == 'workbench.editors.textResourceEditor' && editorTextFocus && config.python.REPL.sendToNativeREPL && editorLangId == python && !jupyter.ownsSelection"
             },
             {
                 "command": "python.execInREPLEnter",

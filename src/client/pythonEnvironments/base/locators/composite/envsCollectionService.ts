@@ -24,7 +24,7 @@ import {
 import { getQueryFilter } from '../../locatorUtils';
 import { PythonEnvCollectionChangedEvent, PythonEnvsWatcher } from '../../watcher';
 import { IEnvsCollectionCache } from './envsCollectionCache';
-import { createNativeGlobalPythonFinder, type NativeEnvInfo } from '../common/nativePythonFinder';
+import { createNativeGlobalPythonFinder, NativeEnvInfo } from '../common/nativePythonFinder';
 import { pathExists } from '../../../../common/platform/fs-paths';
 import { noop } from '../../../../common/utils/misc';
 import { parseVersion } from '../../info/pythonVersion';

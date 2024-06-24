@@ -304,7 +304,7 @@ export class EnvsCollectionService extends PythonEnvsWatcher<PythonEnvCollection
 
             for (const env of envs) {
                 // Lowercase for purposes of comparison (safe).
-                const exe = (env.executable.filename || env.executable.sysPrefix || '').toLowerCase() ;
+                const exe = (env.executable.filename || env.executable.sysPrefix || '').toLowerCase();
                 if (exe) {
                     // If this exe is not found by the native locator, then it is missing.
                     // We need to also look in the list of symlinks.
@@ -353,17 +353,14 @@ export class EnvsCollectionService extends PythonEnvsWatcher<PythonEnvCollection
                             case PythonEnvKind.VirtualEnvWrapper:
                                 missingEnvironments.missingNativeVirtualEnvWrapperEnvs += 1;
                                 break;
-                            case PythonEnvKind.OtherGlobal:
-                                missingEnvironments.missingNativeOtherGlobalEnvs += 1;
-                                break;
                             case PythonEnvKind.ActiveState:
-                                // Do nothing.
                             case PythonEnvKind.Hatch:
+                            case PythonEnvKind.Pixi:
                                 // Do nothing.
-                           case PythonEnvKind.Pixi:
-                                // Do nothing.
+                                break;
                             default:
                                 break;
+                        }
                     }
                 }
             }

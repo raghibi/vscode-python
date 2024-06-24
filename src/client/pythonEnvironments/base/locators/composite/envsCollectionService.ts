@@ -270,10 +270,103 @@ export class EnvsCollectionService extends PythonEnvsWatcher<PythonEnvCollection
             const envs = this.cache.getAllEnvs();
 
             const nativeEnvs = [];
+            const executablesFoundByNativeLocator = new Set<string>();
+            const nativeStopWatch = new StopWatch();
             for await (const data of this.nativeFinder.refresh()) {
                 nativeEnvs.push(data);
+                if (data.executable) {
+                    // Lowercase for purposes of comparison (safe).
+                    executablesFoundByNativeLocator.add(data.executable.toLowerCase());
+                } else if (data.prefix) {
+                    // Lowercase for purposes of comparison (safe).
+                    executablesFoundByNativeLocator.add(data.prefix.toLowerCase());
+                }
+                // Lowercase for purposes of comparison (safe).
+                (data.symlinks || []).forEach((exe) => executablesFoundByNativeLocator.add(exe.toLowerCase()));
             }
+            const nativeDuration = nativeStopWatch.elapsedTime;
+            const missingEnvironments = {
+                missingNativeCondaEnvs: 0,
+                missingNativeCustomEnvs: 0,
+                missingNativeMicrosoftStoreEnvs: 0,
+                missingNativeGlobalEnvs: 0,
+                missingNativeOtherVirtualEnvs: 0,
+                missingNativePipEnvEnvs: 0,
+                missingNativePoetryEnvs: 0,
+                missingNativePyenvEnvs: 0,
+                missingNativeSystemEnvs: 0,
+                missingNativeUnknownEnvs: 0,
+                missingNativeVenvEnvs: 0,
+                missingNativeVirtualEnvEnvs: 0,
+                missingNativeVirtualEnvWrapperEnvs: 0,
+                missingNativeOtherGlobalEnvs: 0,
+            };
 
+            for (const env of envs) {
+                // Lowercase for purposes of comparison (safe).
+                const exe = (env.executable.filename || env.executable.sysPrefix || '').toLowerCase() ;
+                if (exe) {
+                    // If this exe is not found by the native locator, then it is missing.
+                    // We need to also look in the list of symlinks.
+                    // Taking a count of each group isn't necessarily accurate.
+                    // Native locator might identify something as System and
+                    // Old Python ext code might identify it as Global, or the like.
+                    // Safest is to look for the executable.
+                    if (!executablesFoundByNativeLocator.has(exe)) {
+                        switch (env.kind) {
+                            case PythonEnvKind.Conda:
+                                missingEnvironments.missingNativeCondaEnvs += 1;
+                                break;
+                            case PythonEnvKind.Custom:
+                                missingEnvironments.missingNativeCustomEnvs += 1;
+                                break;
+                            case PythonEnvKind.MicrosoftStore:
+                                missingEnvironments.missingNativeMicrosoftStoreEnvs += 1;
+                                break;
+                            case PythonEnvKind.OtherGlobal:
+                                missingEnvironments.missingNativeGlobalEnvs += 1;
+                                break;
+                            case PythonEnvKind.OtherVirtual:
+                                missingEnvironments.missingNativeOtherVirtualEnvs += 1;
+                                break;
+                            case PythonEnvKind.Pipenv:
+                                missingEnvironments.missingNativePipEnvEnvs += 1;
+                                break;
+                            case PythonEnvKind.Poetry:
+                                missingEnvironments.missingNativePoetryEnvs += 1;
+                                break;
+                            case PythonEnvKind.Pyenv:
+                                missingEnvironments.missingNativePyenvEnvs += 1;
+                                break;
+                            case PythonEnvKind.System:
+                                missingEnvironments.missingNativeSystemEnvs += 1;
+                                break;
+                            case PythonEnvKind.Unknown:
+                                missingEnvironments.missingNativeUnknownEnvs += 1;
+                                break;
+                            case PythonEnvKind.Venv:
+                                missingEnvironments.missingNativeVenvEnvs += 1;
+                                break;
+                            case PythonEnvKind.VirtualEnv:
+                                missingEnvironments.missingNativeVirtualEnvEnvs += 1;
+                                break;
+                            case PythonEnvKind.VirtualEnvWrapper:
+                                missingEnvironments.missingNativeVirtualEnvWrapperEnvs += 1;
+                                break;
+                            case PythonEnvKind.OtherGlobal:
+                                missingEnvironments.missingNativeOtherGlobalEnvs += 1;
+                                break;
+                            case PythonEnvKind.ActiveState:
+                                // Do nothing.
+                            case PythonEnvKind.Hatch:
+                                // Do nothing.
+                           case PythonEnvKind.Pixi:
+                                // Do nothing.
+                            default:
+                                break;
+                    }
+                }
+            }
             const environmentsWithoutPython = envs.filter(
                 (e) => getEnvPath(e.executable.filename, e.location).pathType === 'envFolderPath',
             ).length;
@@ -350,6 +443,7 @@ export class EnvsCollectionService extends PythonEnvsWatcher<PythonEnvCollection
 
             // Intent is to capture time taken for discovery of all envs to complete the first time.
             sendTelemetryEvent(EventName.PYTHON_INTERPRETER_DISCOVERY, stopWatch.elapsedTime, {
+                nativeDuration,
                 interpreters: this.cache.getAllEnvs().length,
                 environmentsWithoutPython,
                 activeStateEnvs,
@@ -383,6 +477,7 @@ export class EnvsCollectionService extends PythonEnvsWatcher<PythonEnvCollection
                 nativeVirtualEnvEnvs,
                 nativeVirtualEnvWrapperEnvs,
                 nativeGlobal,
+                ...missingEnvironments,
             });
         }
         this.hasRefreshFinishedForQuery.set(query, true);

@@ -260,6 +260,10 @@ jobs:
         run: nox --session native_build
         shell: bash
 
+      - name: Find Python Envs
+        run: ./python-env-tools/bin/pet
+        shell: bash
+
       - name: Install functional test requirements
         run: python -m pip install --upgrade -r ./build/functional-test-requirements.txt
         if: matrix.test-suite == 'functional'
@@ -528,6 +532,10 @@ jobs:
 
       - name: Build Native Binaries
         run: nox --session native_build
+        shell: bash
+
+      - name: Find Python Envs
+        run: ./python-env-tools/bin/pet
         shell: bash
 
       - name: Install test requirements

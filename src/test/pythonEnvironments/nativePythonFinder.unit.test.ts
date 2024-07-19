@@ -6,10 +6,10 @@ import * as sinon from 'sinon';
 import * as typemoq from 'typemoq';
 import { Uri, WorkspaceConfiguration } from 'vscode';
 import {
-    getNativePythonFinder,
     isNativeEnvInfo,
     NativeEnvInfo,
     NativePythonFinder,
+    NativePythonFinderImpl,
 } from '../../client/pythonEnvironments/base/locators/common/nativePythonFinder';
 import * as windowsApis from '../../client/common/vscodeApis/windowApis';
 import { MockOutputChannel } from '../mockClasses';
@@ -39,7 +39,7 @@ suite('Native Python Finder', () => {
         configMock.setup((c) => c.get<string>('poetryPath')).returns(() => '');
         getConfigurationStub.returns(configMock.object);
 
-        finder = getNativePythonFinder();
+        finder = new NativePythonFinderImpl();
     });
 
     teardown(() => {
@@ -136,5 +136,40 @@ suite('Native Python Finder', () => {
 
         assert.ok(foundEnv, `Conda env ${JSON.stringify(condaEnv)} not found, only found ${foundEnvs}`);
         assert.deepEqual(condaEnv, foundEnv);
+    });
+    test('Find Python environment in current workspace folder return a list of envs', async () => {
+        const envs = (await flattenIterable(finder.refresh())).filter(isNativeEnvInfo);
+
+        const condaEnv = envs.find((e) => e.kind === NativePythonEnvironmentKind.Conda && e.executable && e.prefix);
+        const executable = condaEnv?.executable;
+        if (!condaEnv || !executable) {
+            return;
+        }
+
+        // Running a find on this env should return the same details.
+        const foundEnvs = (await flattenIterable(finder.refresh([Uri.file(executable)]))).filter(isNativeEnvInfo);
+        const foundEnv = foundEnvs.find((e) => e.executable === condaEnv.executable);
+
+        assert.ok(foundEnv, `Conda env ${JSON.stringify(condaEnv)} not found, only found ${foundEnvs}`);
+        assert.deepEqual(condaEnv, foundEnv);
+    });
+    test('Find just conda envs', async () => {
+        const envs = (await flattenIterable(finder.refresh())).filter(isNativeEnvInfo);
+
+        if (!envs.some((e) => e.kind === NativePythonEnvironmentKind.Conda)) {
+            return;
+        }
+        finder.dispose();
+
+        finder = new NativePythonFinderImpl();
+        // Running a find on this env should return the same details.
+        const foundEnvs = (await flattenIterable(finder.refresh(NativePythonEnvironmentKind.Conda))).filter(
+            isNativeEnvInfo,
+        );
+
+        assert.ok(
+            envs.some((e) => e.kind === NativePythonEnvironmentKind.Conda),
+            `Conda envs not found, only found ${foundEnvs}`,
+        );
     });
 });

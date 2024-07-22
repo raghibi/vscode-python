@@ -23,7 +23,7 @@ const untildify = require('untildify');
 
 const PYTHON_ENV_TOOLS_PATH = isWindows()
     ? path.join(EXTENSION_ROOT_DIR, 'python-env-tools', 'bin', 'pet.exe')
-    : path.join(EXTENSION_ROOT_DIR, 'python-env-tools', 'bin', 'pet');
+    : '/Users/donjayamanne/Development/vsc/python-environment-tools/target/debug/pet';
 
 export interface NativeEnvInfo {
     displayName?: string;
@@ -91,7 +91,7 @@ interface NativeLog {
     message: string;
 }
 
-class NativePythonFinderImpl extends DisposableBase implements NativePythonFinder {
+export class NativePythonFinderImpl extends DisposableBase implements NativePythonFinder {
     private readonly connection: rpc.MessageConnection;
 
     private firstRefreshResults: undefined | (() => AsyncGenerator<NativeEnvInfo, void, unknown>);

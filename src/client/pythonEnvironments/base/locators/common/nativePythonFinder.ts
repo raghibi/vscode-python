@@ -91,7 +91,7 @@ interface NativeLog {
     message: string;
 }
 
-class NativePythonFinderImpl extends DisposableBase implements NativePythonFinder {
+export class NativePythonFinderImpl extends DisposableBase implements NativePythonFinder {
     private readonly connection: rpc.MessageConnection;
 
     private firstRefreshResults: undefined | (() => AsyncGenerator<NativeEnvInfo, void, unknown>);

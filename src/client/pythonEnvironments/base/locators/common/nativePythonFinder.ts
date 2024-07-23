@@ -154,7 +154,7 @@ export class NativePythonFinderImpl extends DisposableBase implements NativePyth
         }
     }
 
-    refreshFirstTime() {
+    refreshFirstTime(): () => AsyncGenerator<NativeEnvInfo, void, unknown> {
         const result = this.doRefresh();
         const completed = createDeferredFrom(result.completed);
         const envs: NativeEnvInfo[] = [];

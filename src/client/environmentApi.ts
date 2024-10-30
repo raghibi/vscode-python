@@ -148,6 +148,25 @@ export function buildEnvironmentApi(
             })
             .ignoreErrors();
     }
+
+    function getActiveEnvironmentPath(resource?: Resource) {
+        resource = resource && 'uri' in resource ? resource.uri : resource;
+        const jupyterEnv = resource ? jupyterPythonEnvsApi.getPythonEnvironment(resource) : undefined;
+        if (jupyterEnv) {
+            traceVerbose('Python Environment returned from Jupyter', resource?.fsPath, jupyterEnv.id);
+            return {
+                id: jupyterEnv.id,
+                path: jupyterEnv.path,
+            };
+        }
+        const path = configService.getSettings(resource).pythonPath;
+        const id = path === 'python' ? 'DEFAULT_PYTHON' : getEnvID(path);
+        return {
+            id,
+            path,
+        };
+    }
+
     disposables.push(
         discoveryApi.onProgress((e) => {
             if (e.stage === ProgressReportStage.discoveryFinished) {
@@ -209,7 +228,7 @@ export function buildEnvironmentApi(
         onEnvironmentsChanged,
         onEnvironmentVariablesChanged,
         jupyterPythonEnvsApi.onDidChangePythonEnvironment((e) => {
-            const jupyterEnv = environmentApi.getActiveEnvironmentPath(e);
+            const jupyterEnv = getActiveEnvironmentPath(e);
             onDidActiveInterpreterChangedEvent.fire({
                 id: jupyterEnv.id,
                 path: jupyterEnv.path,
@@ -233,21 +252,7 @@ export function buildEnvironmentApi(
         },
         getActiveEnvironmentPath(resource?: Resource) {
             sendApiTelemetry('getActiveEnvironmentPath');
-            resource = resource && 'uri' in resource ? resource.uri : resource;
-            const jupyterEnv = resource ? jupyterPythonEnvsApi.getPythonEnvironment(resource) : undefined;
-            if (jupyterEnv) {
-                traceVerbose('Python Environment returned from Jupyter', resource?.fsPath, jupyterEnv.id);
-                return {
-                    id: jupyterEnv.id,
-                    path: jupyterEnv.path,
-                };
-            }
-            const path = configService.getSettings(resource).pythonPath;
-            const id = path === 'python' ? 'DEFAULT_PYTHON' : getEnvID(path);
-            return {
-                id,
-                path,
-            };
+            return getActiveEnvironmentPath(resource);
         },
         updateActiveEnvironmentPath(env: Environment | EnvironmentPath | string, resource?: Resource): Promise<void> {
             sendApiTelemetry('updateActiveEnvironmentPath');

@@ -1,6 +1,6 @@
 /* eslint-disable comma-dangle */
 
-/* eslint-disable implicit-arrow-linebreak */
+/* eslint-disable implicit-arrow-linebreak, max-classes-per-file */
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
@@ -202,7 +202,6 @@ export interface JupyterPythonEnvironmentApi {
             };
 }
 
-// eslint-disable-next-line max-classes-per-file
 
 @injectable()
 export class JupyterExtensionPythonEnvironments extends DisposableBase implements JupyterPythonEnvironmentApi  {

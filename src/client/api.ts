@@ -15,7 +15,11 @@ import { IConfigurationService, Resource } from './common/types';
 import { getDebugpyLauncherArgs } from './debugger/extension/adapter/remoteLaunchers';
 import { IInterpreterService } from './interpreter/contracts';
 import { IServiceContainer, IServiceManager } from './ioc/types';
-import { JupyterExtensionIntegration, JupyterExtensionPythonEnvironments, type JupyterPythonEnvironmentApi } from './jupyter/jupyterIntegration';
+import {
+    JupyterExtensionIntegration,
+    JupyterExtensionPythonEnvironments,
+    JupyterPythonEnvironmentApi,
+} from './jupyter/jupyterIntegration';
 import { traceError } from './logging';
 import { IDiscoveryAPI } from './pythonEnvironments/base/locator';
 import { buildEnvironmentApi } from './environmentApi';
@@ -33,7 +37,10 @@ export function buildApi(
     const configurationService = serviceContainer.get<IConfigurationService>(IConfigurationService);
     const interpreterService = serviceContainer.get<IInterpreterService>(IInterpreterService);
     serviceManager.addSingleton<JupyterExtensionIntegration>(JupyterExtensionIntegration, JupyterExtensionIntegration);
-    serviceManager.addSingleton<JupyterExtensionPythonEnvironments>(JupyterExtensionPythonEnvironments, JupyterExtensionPythonEnvironments);
+    serviceManager.addSingleton<JupyterExtensionPythonEnvironments>(
+        JupyterExtensionPythonEnvironments,
+        JupyterExtensionPythonEnvironments,
+    );
     serviceManager.addSingleton<TensorboardExtensionIntegration>(
         TensorboardExtensionIntegration,
         TensorboardExtensionIntegration,

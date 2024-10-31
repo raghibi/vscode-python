@@ -6,7 +6,7 @@
 
 import { inject, injectable, named } from 'inversify';
 import { dirname } from 'path';
-import { EventEmitter, Extension, Memento, Uri, workspace, type Event } from 'vscode';
+import { EventEmitter, Extension, Memento, Uri, workspace, Event } from 'vscode';
 import type { SemVer } from 'semver';
 import { IContextKeyManager, IWorkspaceService } from '../common/application/types';
 import { JUPYTER_EXTENSION_ID, PYLANCE_EXTENSION_ID } from '../common/constants';
@@ -172,7 +172,6 @@ export class JupyterExtensionIntegration {
     }
 }
 
-
 export interface JupyterPythonEnvironmentApi {
     /**
      * This event is triggered when the environment associated with a Jupyter Notebook or Interactive Window changes.
@@ -189,58 +188,63 @@ export interface JupyterPythonEnvironmentApi {
     ):
         | undefined
         | {
-                /**
-                 * The ID of the environment.
-                 */
-                readonly id: string;
-                /**
-                 * Path to environment folder or path to python executable that uniquely identifies an environment. Environments
-                 * lacking a python executable are identified by environment folder paths, whereas other envs can be identified
-                 * using python executable path.
-                 */
-                readonly path: string;
-            };
+              /**
+               * The ID of the environment.
+               */
+              readonly id: string;
+              /**
+               * Path to environment folder or path to python executable that uniquely identifies an environment. Environments
+               * lacking a python executable are identified by environment folder paths, whereas other envs can be identified
+               * using python executable path.
+               */
+              readonly path: string;
+          };
 }
 
-
 @injectable()
-export class JupyterExtensionPythonEnvironments extends DisposableBase implements JupyterPythonEnvironmentApi  {
+export class JupyterExtensionPythonEnvironments extends DisposableBase implements JupyterPythonEnvironmentApi {
     private jupyterExtension?: JupyterPythonEnvironmentApi;
 
     private readonly _onDidChangePythonEnvironment = this._register(new EventEmitter<Uri>());
 
     public readonly onDidChangePythonEnvironment = this._onDidChangePythonEnvironment.event;
 
-    constructor(
-        @inject(IExtensions) private readonly extensions: IExtensions,
-    ) {
+    constructor(@inject(IExtensions) private readonly extensions: IExtensions) {
         super();
     }
 
-    public getPythonEnvironment(uri: Uri): undefined |
-    {
-        /**
-         * The ID of the environment.
-         */
-        readonly id: string;
-        /**
-         * Path to environment folder or path to python executable that uniquely identifies an environment. Environments
-         * lacking a python executable are identified by environment folder paths, whereas other envs can be identified
-         * using python executable path.
-         */
-        readonly path: string;
-    } {
+    public getPythonEnvironment(
+        uri: Uri,
+    ):
+        | undefined
+        | {
+              /**
+               * The ID of the environment.
+               */
+              readonly id: string;
+              /**
+               * Path to environment folder or path to python executable that uniquely identifies an environment. Environments
+               * lacking a python executable are identified by environment folder paths, whereas other envs can be identified
+               * using python executable path.
+               */
+              readonly path: string;
+          } {
         return isJupyterResource(uri) ? this.getJupyterApi()?.getPythonEnvironment(uri) : undefined;
     }
 
-    private getJupyterApi(){
+    private getJupyterApi() {
         if (!this.jupyterExtension) {
             const api = this.extensions.getExtension<JupyterPythonEnvironmentApi>(JUPYTER_EXTENSION_ID)?.exports;
             if (!api) {
                 return undefined;
             }
             this.jupyterExtension = api;
-            this._register(api.onDidChangePythonEnvironment(this._onDidChangePythonEnvironment.fire, this._onDidChangePythonEnvironment));
+            this._register(
+                api.onDidChangePythonEnvironment(
+                    this._onDidChangePythonEnvironment.fire,
+                    this._onDidChangePythonEnvironment,
+                ),
+            );
         }
         return this.jupyterExtension;
     }
@@ -248,5 +252,8 @@ export class JupyterExtensionPythonEnvironments extends DisposableBase implement
 
 function isJupyterResource(resource: Uri): boolean {
     // Jupyter extension only deals with Notebooks and Interactive Windows.
-    return resource.fsPath.endsWith('.ipynb') || workspace.notebookDocuments.some((item) => item.uri.toString() === resource.toString());
+    return (
+        resource.fsPath.endsWith('.ipynb') ||
+        workspace.notebookDocuments.some((item) => item.uri.toString() === resource.toString())
+    );
 }

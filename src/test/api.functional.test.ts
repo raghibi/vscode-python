@@ -20,7 +20,7 @@ import { IServiceContainer, IServiceManager } from '../client/ioc/types';
 import { IDiscoveryAPI } from '../client/pythonEnvironments/base/locator';
 import * as pythonDebugger from '../client/debugger/pythonDebugger';
 import { JupyterExtensionPythonEnvironments, JupyterPythonEnvironmentApi } from '../client/jupyter/jupyterIntegration';
-import { EventEmitter, type Uri } from 'vscode';
+import { EventEmitter, Uri } from 'vscode';
 
 suite('Extension API', () => {
     const debuggerPath = path.join(EXTENSION_ROOT_DIR, 'python_files', 'lib', 'python', 'debugpy');

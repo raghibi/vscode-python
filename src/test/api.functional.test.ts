@@ -56,7 +56,9 @@ suite('Extension API', () => {
             onDidChangePythonEnvironment: onDidChangePythonEnvironment.event,
             getPythonEnvironment: (_uri: Uri) => undefined,
         };
-        when(serviceContainer.get<JupyterPythonEnvironmentApi>(JupyterExtensionPythonEnvironments)).thenReturn(jupyterApi);
+        when(serviceContainer.get<JupyterPythonEnvironmentApi>(JupyterExtensionPythonEnvironments)).thenReturn(
+            jupyterApi,
+        );
         when(serviceContainer.get<IDisposableRegistry>(IDisposableRegistry)).thenReturn([]);
         getDebugpyPathStub = sinon.stub(pythonDebugger, 'getDebugpyPath');
         getDebugpyPathStub.resolves(debuggerPath);
